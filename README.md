@@ -9,11 +9,11 @@ A high-performance, local-first dictation app for macOS that lives in your menu 
 - **Smart Flow:** Optional Cloud AI post-processing (OpenAI or Groq) to format text (e.g., bullet points, email cleanup).
 - **Custom Vocabulary:** Add personal words (names, acronyms, jargon) to improve recognition accuracy.
 - **Auto-Learn Dictionary:** Automatically learns from your corrections and applies them to future dictations.
-- **Optimized Whisper Engine:** Local transcription optimized with 8-thread inference for <2s latency.
-- **Latency Speedometer:** Real-time performance tracking in the menu bar.
-- **Zero-Latency Mode:** Optimized for <1.5s turnaround with Groq.
-- **Stealth Paste:** Keeps your clipboard history clear by using transient metadata.
-- **Global 10s Timeout:** All processing stacks timeout after 10 seconds to prevent hangs.
+- **Optimized Whisper Engine**: Local transcription optimized with 8-thread inference for ultra-low post-release latency.
+- **Latency Speedometer**: Real-time performance tracking in the menu bar.
+- **Ultra-Low Latency Flow**: Optimized for <1.5s post-release turnaround with Groq.
+- **Stealth Paste**: Keeps your clipboard history clear by using transient metadata.
+- **Global 30s Timeout**: All processing stacks timeout after 30 seconds to ensure high reliability.
 
 ## Installation
 
