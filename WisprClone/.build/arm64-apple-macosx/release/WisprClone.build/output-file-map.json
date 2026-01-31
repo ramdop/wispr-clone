@@ -1,0 +1,169 @@
+{
+  "": {
+    "dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WisprClone.d",
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WisprClone.o",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/master.swiftdeps"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/AppState.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AppState.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AppState~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AppState.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AppState.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/AudioRecorder.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AudioRecorder.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AudioRecorder~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AudioRecorder.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AudioRecorder.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/AudioUtils.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AudioUtils.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AudioUtils~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AudioUtils.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/AudioUtils.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/ContextManager.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/ContextManager.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/ContextManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/ContextManager.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/ContextManager.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/CorrectionDiff.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CorrectionDiff.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CorrectionDiff~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CorrectionDiff.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CorrectionDiff.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/CorrectionSession.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CorrectionSession.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CorrectionSession~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CorrectionSession.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CorrectionSession.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/CustomVocabularyStore.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CustomVocabularyStore.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CustomVocabularyStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CustomVocabularyStore.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/CustomVocabularyStore.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/DictionaryTab.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/DictionaryTab.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/DictionaryTab~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/DictionaryTab.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/DictionaryTab.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/FocusCapture.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/FocusCapture.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/FocusCapture~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/FocusCapture.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/FocusCapture.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/HUDOverlay.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/HUDOverlay.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/HUDOverlay~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/HUDOverlay.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/HUDOverlay.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/HotKey.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/HotKey.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/HotKey~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/HotKey.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/HotKey.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/LLMService.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/LLMService.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/LLMService~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/LLMService.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/LLMService.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/LearnedDictionaryStore.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/LearnedDictionaryStore.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/LearnedDictionaryStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/LearnedDictionaryStore.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/LearnedDictionaryStore.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/Logger.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Logger.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Logger~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Logger.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Logger.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/MenuBarView.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/MenuBarView.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/MenuBarView~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/MenuBarView.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/MenuBarView.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/ModelDownloader.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/ModelDownloader.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/ModelDownloader~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/ModelDownloader.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/ModelDownloader.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/Permissions.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Permissions.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Permissions~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Permissions.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Permissions.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/Snippet.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Snippet.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Snippet~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Snippet.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/Snippet.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/SnippetStore.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SnippetStore.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SnippetStore~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SnippetStore.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SnippetStore.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/SnippetsTab.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SnippetsTab.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SnippetsTab~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SnippetsTab.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SnippetsTab.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/SpeechTranscriber.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SpeechTranscriber.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SpeechTranscriber~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SpeechTranscriber.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/SpeechTranscriber.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/TextCleaner.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/TextCleaner.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/TextCleaner~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/TextCleaner.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/TextCleaner.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/TextInjector.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/TextInjector.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/TextInjector~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/TextInjector.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/TextInjector.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/VisualEffectBlur.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/VisualEffectBlur.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/VisualEffectBlur~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/VisualEffectBlur.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/VisualEffectBlur.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/WaveformView.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WaveformView.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WaveformView~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WaveformView.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WaveformView.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/WhisperEngine.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WhisperEngine.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WhisperEngine~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WhisperEngine.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WhisperEngine.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/Sources/WisprCloneApp.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WisprCloneApp.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WisprCloneApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WisprCloneApp.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/WisprClone.build/WisprCloneApp.dia"
+  }
+}

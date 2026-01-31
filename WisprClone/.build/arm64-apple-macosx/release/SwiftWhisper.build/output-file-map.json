@@ -1,0 +1,49 @@
+{
+  "": {
+    "dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/SwiftWhisper.d",
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/SwiftWhisper.o",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/master.swiftdeps"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/Segment.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/Segment.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/Segment~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/Segment.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/Segment.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/Whisper.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/Whisper.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/Whisper~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/Whisper.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/Whisper.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperDelegate.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperDelegate.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperDelegate~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperDelegate.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperDelegate.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperError.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperError.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperError~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperError.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperError.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperLanguage.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperLanguage.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperLanguage~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperLanguage.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperLanguage.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperParams.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperParams.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperParams~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperParams.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperParams.dia"
+  },
+  "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/checkouts/SwiftWhisper/Sources/SwiftWhisper/WhisperSamplingStrategy.swift": {
+    "object": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperSamplingStrategy.swift.o",
+    "swiftmodule": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperSamplingStrategy~partial.swiftmodule",
+    "swift-dependencies": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperSamplingStrategy.swiftdeps",
+    "diagnostics": "/Users/pramodnammi/Desktop/Build Things/wispr clone/WisprClone/.build/arm64-apple-macosx/release/SwiftWhisper.build/WhisperSamplingStrategy.dia"
+  }
+}
