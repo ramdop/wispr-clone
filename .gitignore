@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# Build Artifacts
+build/
+DerivedData/
+*.app/
+WisprClone.app/
+
+# Logs and Temp Files
+*.log
+wispr.log
+build_log.txt
+*.caf
+*.wav
+temp_recording_*
+
+# Swift Scripts (Debug)
+check_log.swift
+debug_dict.swift
+dump_dict.swift
+
+# Config/Secrets (if any)
+.env
