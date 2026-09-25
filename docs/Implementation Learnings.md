@@ -180,3 +180,12 @@ User requested research on how "Wispr Flow" achieves its advanced modes (Context
   3. Status goes idle right after paste.
   4. `withTimeout` helper (`Timeout.swift`) that resumes at the deadline; Apple Speech now cancels the `SFSpeechRecognitionTask` and resumes its continuation exactly once.
   5. Smaller wins: HID key-release backup poll 100ms→30ms (debounce 300ms→90ms), HUD SwiftUI view built once instead of on every status change, mic level published at ~20 Hz via a separate `AudioLevelMeter` so only the waveform re-renders, clipboard restore made safe for back-to-back dictations.
+
+## Groq Model Retirement & Smart Flow Resilience (2026-09-25)
+
+- **Issue**: Every dictation failed with "The model `llama-3.1-8b-instant` does not exist or you do not have access to it." Groq shut the model down for free/developer tiers on 2026-08-16. Because the LLM error was thrown through the whole pipeline, a *formatting* failure blocked pasting a perfectly good transcript.
+- **Fixes**:
+  1. Default Groq model is now `openai/gpt-oss-20b` (Groq's official replacement, ~1000 tok/s), sent with `reasoning_effort: "low"` and `include_reasoning: false` to keep latency down and the answer clean.
+  2. The Groq model is editable in the menu (`groqModel` in UserDefaults), so the next retirement is a settings change: pick a model from https://console.groq.com/docs/models.
+  3. Dictation falls back to the unformatted transcript when Smart Flow fails, with an orange warning under "Last Transcript". Command mode still fails (it must never paste the spoken instruction over the selection), including when Ollama is down.
+- **LatencyTracker schema**: an older `latency.db` used `total_turnaround` where the current code writes `total_latency`. The tracker now reads `PRAGMA table_info` at startup, adds missing columns, and keeps `total_turnaround` filled when present.

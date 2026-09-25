@@ -287,10 +287,14 @@ actor OpenAIProvider: LLMProvider {
 }
 
 actor GroqProvider: LLMProvider {
+    /// Groq retires models aggressively (llama3-8b-8192, then llama-3.1-8b-instant on 2026-08-16).
+    /// The model is user-configurable in the menu; this is the default.
+    static let defaultModel = "openai/gpt-oss-20b"
+    
     private let baseUrl = URL(string: "https://api.groq.com/openai/v1/chat/completions")!
     private let modelName: String
     
-    init(modelName: String = "llama-3.1-8b-instant") {
+    init(modelName: String = GroqProvider.defaultModel) {
         self.modelName = modelName
     }
     
@@ -308,14 +312,20 @@ actor GroqProvider: LLMProvider {
             ["role": "user", "content": "Transcript to process:\n" + text]
         ]
         
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
              "model": modelName,
              "messages": messages,
              "temperature": 0.3
          ]
+         // gpt-oss models reason before answering: keep it minimal for latency and
+         // leave the reasoning out of the response (the answer stays in message.content)
+         if modelName.hasPrefix("openai/gpt-oss") {
+             payload["reasoning_effort"] = "low"
+             payload["include_reasoning"] = false
+         }
          
         let prompt = template.rawValue + "\n\n" + "Transcript to process:\n" + text // Reconstruct prompt for logging
-        Logger.debug("[Groq] Prompt: \(prompt.prefix(50))...")
+        Logger.debug("[Groq] Model: \(modelName) | Prompt: \(prompt.prefix(50))...")
         Logger.debug("[Groq] API Key: \(apiKey.prefix(5))...")
          
          var request = URLRequest(url: baseUrl, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 10.0)
@@ -363,8 +373,16 @@ class LLMService {
     private var providers: [LLMProviderType: LLMProvider] = [:]
     private var availabilityCache: [LLMProviderType: Bool] = [:]
     
-    func process(_ text: String, provider: LLMProviderType, apiKey: String?, template: PromptTemplate = .smartList) async throws -> String {
-        let llm = getProvider(for: provider)
+    /// - Parameter model: Groq model override; nil or empty uses `GroqProvider.defaultModel`
+    func process(_ text: String, provider: LLMProviderType, apiKey: String?, template: PromptTemplate = .smartList, model: String? = nil) async throws -> String {
+        let llm: LLMProvider
+        if provider == .groq {
+            // Not cached: the model can change from the menu at any time (cheap to create)
+            let trimmed = model?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            llm = GroqProvider(modelName: trimmed.isEmpty ? GroqProvider.defaultModel : trimmed)
+        } else {
+            llm = getProvider(for: provider)
+        }
         
         // Connectivity check only for Ollama, but cached
         if provider == .ollama {

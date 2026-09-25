@@ -14,6 +14,17 @@ class LatencyTracker {
     // and never uses the connection from two threads at once
     private let queue = DispatchQueue(label: "com.wispr.latency-tracker", qos: .utility)
     
+    /// Columns every insert writes. Databases created by earlier versions of this file can lack some
+    /// of them (e.g. they have `total_turnaround` instead of `total_latency`); missing ones are added.
+    private static let expectedColumns: [(name: String, type: String)] = [
+        ("session_id", "TEXT"), ("clip_duration", "REAL"), ("decode_time", "REAL"),
+        ("prosody_time", "REAL"), ("transcription_time", "REAL"), ("llm_time", "REAL"),
+        ("injection_time", "REAL"), ("total_latency", "REAL"), ("engine", "TEXT"),
+        ("mode", "TEXT"), ("status", "TEXT"), ("error_msg", "TEXT")
+    ]
+    /// Older schema's name for total_latency; kept filled so existing queries keep working
+    private var hasLegacyTurnaroundColumn = false
+    
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let directory = appSupport.appendingPathComponent("WisprClone", isDirectory: true)
@@ -38,25 +49,46 @@ class LatencyTracker {
                 injection_time REAL,
                 total_latency REAL,
                 engine TEXT,
-                mode TEXT
+                mode TEXT,
+                status TEXT,
+                error_msg TEXT
             );
             """
             
             if sqlite3_exec(db, createTableQuery, nil, nil, nil) != SQLITE_OK {
                 let errmsg = String(cString: sqlite3_errmsg(db)!)
-                print("error creating table: \(errmsg)")
+                Logger.error("[LatencyTracker] Failed to create table: \(errmsg)")
             }
             
-            // Migration: Add mode column if it doesn't exist (for existing DBs)
-            // We blindly attempt to add it; if it exists, it will fail harmlessly
-            // Ensure schema is updated
-            let _ = sqlite3_exec(db, "ALTER TABLE metrics ADD COLUMN mode TEXT;", nil, nil, nil)
-            let _ = sqlite3_exec(db, "ALTER TABLE metrics ADD COLUMN status TEXT;", nil, nil, nil)
-            let _ = sqlite3_exec(db, "ALTER TABLE metrics ADD COLUMN error_msg TEXT;", nil, nil, nil)
-            
+            // Migration: bring existing databases up to the expected schema
+            let existing = existingColumns()
+            for column in Self.expectedColumns where !existing.contains(column.name) {
+                if sqlite3_exec(db, "ALTER TABLE metrics ADD COLUMN \(column.name) \(column.type);", nil, nil, nil) == SQLITE_OK {
+                    Logger.info("[LatencyTracker] Added missing column '\(column.name)'")
+                } else {
+                    let errmsg = String(cString: sqlite3_errmsg(db)!)
+                    Logger.error("[LatencyTracker] Failed to add column '\(column.name)': \(errmsg)")
+                }
+            }
+            hasLegacyTurnaroundColumn = existing.contains("total_turnaround")
         } else {
-            print("error opening database")
+            Logger.error("[LatencyTracker] Failed to open database at \(dbPath)")
         }
+    }
+    
+    private func existingColumns() -> Set<String> {
+        var names = Set<String>()
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, "PRAGMA table_info(metrics);", -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                // Column 1 of table_info is the column name
+                if let name = sqlite3_column_text(stmt, 1) {
+                    names.insert(String(cString: name))
+                }
+            }
+        }
+        sqlite3_finalize(stmt)
+        return names
     }
     
     func record(
@@ -95,9 +127,10 @@ class LatencyTracker {
         status: String,
         errorMessage: String?
     ) {
+        let legacy = hasLegacyTurnaroundColumn
         let insertQuery = """
-        INSERT INTO metrics (session_id, clip_duration, decode_time, prosody_time, transcription_time, llm_time, injection_time, total_latency, engine, mode, status, error_msg)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO metrics (session_id, clip_duration, decode_time, prosody_time, transcription_time, llm_time, injection_time, total_latency, engine, mode, status, error_msg\(legacy ? ", total_turnaround" : ""))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?\(legacy ? ", ?" : ""));
         """
         
         var stmt: OpaquePointer?
@@ -118,6 +151,9 @@ class LatencyTracker {
                 sqlite3_bind_text(stmt, 12, (errorMsg as NSString).utf8String, -1, SQLITE_TRANSIENT)
             } else {
                 sqlite3_bind_null(stmt, 12)
+            }
+            if legacy {
+                sqlite3_bind_double(stmt, 13, totalLatency)
             }
             
             if sqlite3_step(stmt) != SQLITE_DONE {

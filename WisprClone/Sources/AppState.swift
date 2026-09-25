@@ -75,6 +75,16 @@ class AppState: ObservableObject, HotKeyDelegate {
         }
     }
     
+    /// Editable so a Groq model retirement is a settings change, not a rebuild
+    @Published var groqModel: String = UserDefaults.standard.string(forKey: "groqModel") ?? GroqProvider.defaultModel {
+        didSet {
+            UserDefaults.standard.set(groqModel, forKey: "groqModel")
+        }
+    }
+    
+    /// Set when Smart Flow failed and the transcript was pasted unformatted; cleared on the next dictation
+    @Published var smartFlowWarning: String?
+    
     @Published var hasMicAccess: Bool = false
     @Published var hasSpeechAccess: Bool = false
     @Published var hasAccessibilityAccess: Bool = false
@@ -447,6 +457,7 @@ class AppState: ObservableObject, HotKeyDelegate {
         let llmProvider = selectedLLMProvider
         let oaiKey = openaiApiKey
         let gKey = groqApiKey
+        let gModel = groqModel
         let cText = contextText
         let llmAvail = isLLMAvailable
         let isHighPerf = highPerformanceMode
@@ -466,6 +477,7 @@ class AppState: ObservableObject, HotKeyDelegate {
             let clipDuration = AudioUtils.duration(of: url)
             var transcriptionTime: Double = 0
             var llmTime: Double = 0
+            var smartFlowError: String?
             
             do {
                 // --- TRANSCRIPTION ---
@@ -498,7 +510,12 @@ class AppState: ObservableObject, HotKeyDelegate {
                     if uSmartFlow || cInputMode == .command {
                         let llmStart = Date()
                         if llmProvider == .ollama && !llmAvail {
+                            if cInputMode == .command {
+                                // Never paste the spoken instruction over the user's selection
+                                throw NSError(domain: "WisprClone", code: 503, userInfo: [NSLocalizedDescriptionKey: "Command Mode Failed: Ollama not running."])
+                            }
                             Logger.warning("Smart Flow skipped: Ollama unavailable")
+                            smartFlowError = "Ollama not running"
                         } else {
                             // Update status to processing on Main Thread
                             await MainActor.run {
@@ -515,13 +532,14 @@ class AppState: ObservableObject, HotKeyDelegate {
                                     Input Instruction: "\(cleaned)"
                                     """
                                     // Use captured 'llmService'
-                                    cleaned = try await llmService.process(combinedInput, provider: llmProvider, apiKey: key, template: .command)
+                                    cleaned = try await llmService.process(combinedInput, provider: llmProvider, apiKey: key, template: .command, model: gModel)
                                 } else {
                                     Logger.error("Command Mode Error: No context to operate on.")
                                     throw NSError(domain: "WisprClone", code: 404, userInfo: [NSLocalizedDescriptionKey: "Command Mode Failed: No text selected."])
                                 }
                             } else {
                                 // Use dictionary-aware template if we have learned entries or custom vocabulary
+                                let template: PromptTemplate
                                 if !dictEntries.isEmpty || !contextWords.isEmpty {
                                     // Format dictionary entries for LLM
                                     let dictText = dictEntries.map { entry in
@@ -538,11 +556,20 @@ class AppState: ObservableObject, HotKeyDelegate {
                                             .replacingOccurrences(of: "%CUSTOM_VOCABULARIES%", with: vocabText.isEmpty ? "None" : vocabText)
                                     )
                                     Logger.info("📚 Including \(dictEntries.count) dict entries and \(contextWords.count) vocab words in LLM prompt")
-                                    
-                                    cleaned = try await llmService.process(cleaned, provider: llmProvider, apiKey: key, template: templateWithDict)
+                                    template = templateWithDict
                                 } else {
                                     // No dictionary entries and no custom vocab, use standard template
-                                    cleaned = try await llmService.process(cleaned, provider: llmProvider, apiKey: key)
+                                    template = .smartList
+                                }
+                                
+                                // Dictation never fails because of Smart Flow: on any LLM error, paste the
+                                // cleaned transcript unformatted. (Command mode still fails above - pasting the
+                                // spoken instruction over the user's selection would be destructive.)
+                                do {
+                                    cleaned = try await llmService.process(cleaned, provider: llmProvider, apiKey: key, template: template, model: gModel)
+                                } catch {
+                                    smartFlowError = error.localizedDescription
+                                    Logger.warning("Smart Flow failed, pasting unformatted transcript: \(error.localizedDescription)")
                                 }
                             }
                         }
@@ -566,10 +593,12 @@ class AppState: ObservableObject, HotKeyDelegate {
                 let duration = Date().timeIntervalSince(totalStartTime)
                 let tTime = transcriptionTime
                 let lTime = llmTime
+                let sfError = smartFlowError
                 
                 // --- FINAL UI UPDATE & PASTE ---
                 await MainActor.run {
                     self.lastTranscript = finalCleaned
+                    self.smartFlowWarning = sfError
                     self.processingDuration = duration
                     Logger.info("Total Pipeline: \(String(format: "%.2fs", duration))")
                     
@@ -602,7 +631,8 @@ class AppState: ObservableObject, HotKeyDelegate {
                         injectionTime: injectTime,
                         totalLatency: duration,
                         engine: engineName,
-                        mode: cInputMode.description
+                        mode: cInputMode.description,
+                        errorMessage: sfError.map { "Smart Flow: \($0)" }
                     )
                 }
                 
