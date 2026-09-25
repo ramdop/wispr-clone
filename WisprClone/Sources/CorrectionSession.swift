@@ -34,41 +34,49 @@ class CorrectionSession {
     
     /// Start observing for corrections
     /// Completion is called with result when session ends (either by idle settle or hard stop)
+    /// Start observing for corrections
+    /// Completion is called with result when session ends (either by idle settle or hard stop)
     func start(completion: @escaping (CorrectionResult?) -> Void) {
         self.completion = completion
         
-        // Create AX observer
-        var observerRef: AXObserver?
-        let createResult = AXObserverCreate(focusInfo.pid, axCallback, &observerRef)
-        
-        guard createResult == .success, let obs = observerRef else {
-            Logger.error("[CorrectionSession] Failed to create AXObserver: \(createResult.rawValue)")
-            completion(nil)
-            return
-        }
-        
-        self.observer = obs
-        
-        // Add notification for value changes
-        let addResult = AXObserverAddNotification(obs, focusInfo.element, kAXValueChangedNotification as CFString, Unmanaged.passUnretained(self).toOpaque())
-        
-        if addResult != .success {
-            Logger.debug("[CorrectionSession] Failed to add value notification: \(addResult.rawValue)")
-            // Continue anyway - we'll use timer-based snapshots as fallback
-        }
-        
-        // Add observer to run loop
-        CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .commonModes)
-        
-        // Start hard stop timer
+        // Start hard stop timer immediately
         hardStopTimer = Timer.scheduledTimer(withTimeInterval: hardStopDelay, repeats: false) { [weak self] _ in
             self?.endSession(reason: "hard stop")
         }
         
-        // Start initial idle timer
+        // Start initial idle timer immediately
         restartIdleTimer()
         
-        Logger.debug("[CorrectionSession] Started observing for corrections (bundleID: \(focusInfo.bundleID ?? "unknown"))")
+        // Move intrusive AX operations to background to avoid blocking Main Thread
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            // Create AX observer (Can block if target app is busy)
+            var observerRef: AXObserver?
+            let createResult = AXObserverCreate(self.focusInfo.pid, axCallback, &observerRef)
+            
+            guard createResult == .success, let obs = observerRef else {
+                Logger.warning("[CorrectionSession] Failed to create AXObserver: \(createResult.rawValue)")
+                return
+            }
+            
+            // Add notification for value changes (Can block)
+            let addResult = AXObserverAddNotification(obs, self.focusInfo.element, kAXValueChangedNotification as CFString, Unmanaged.passUnretained(self).toOpaque())
+            
+            if addResult != .success {
+                Logger.debug("[CorrectionSession] Failed to add value notification: \(addResult.rawValue)")
+            }
+            
+            // Attach to Main RunLoop (Must be done to receive callbacks)
+            // This part is fast and safe to do from background targeting Main RunLoop
+            let runLoopSource = AXObserverGetRunLoopSource(obs)
+            CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+            
+            DispatchQueue.main.async {
+                self.observer = obs
+                Logger.debug("[CorrectionSession] Started observing (async) for corrections (bundleID: \(self.focusInfo.bundleID ?? "unknown"))")
+            }
+        }
     }
     
     /// Called when AX notification is received (from C callback)

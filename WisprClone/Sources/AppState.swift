@@ -81,9 +81,17 @@ class AppState: ObservableObject, HotKeyDelegate {
     @Published var snippetStore = SnippetStore()
     @Published var customVocabularyStore = CustomVocabularyStore()
     @Published var learnedDictionaryStore = LearnedDictionaryStore()
+    private let latencyTracker = LatencyTracker.shared
+    private let prosodyAnalyzer = ProsodyAnalyzer.shared
     
     // Active correction session
     private var activeCorrectionSession: CorrectionSession?
+    
+    @Published var highPerformanceMode: Bool = UserDefaults.standard.bool(forKey: "highPerformanceMode") {
+        didSet {
+            UserDefaults.standard.set(highPerformanceMode, forKey: "highPerformanceMode")
+        }
+    }
     
     @Published var useSnippets: Bool = true {
         didSet {
@@ -319,6 +327,8 @@ class AppState: ObservableObject, HotKeyDelegate {
     private var keyReleaseCount: Int = 0
     
     func startRecording(mode: InputMode = .dictation) {
+        let startInit = Date()
+        
         // Allow recording from idle or any error state
         switch status {
         case .idle, .error:
@@ -329,13 +339,16 @@ class AppState: ObservableObject, HotKeyDelegate {
         
         guard permissions.hasMicrophoneAccess else {
             setError("Microphone access missing")
+            requestPermissions() // Proactively request if not granted
             return
         }
         
         currentInputMode = mode
         
         // FIRST: Capture context BEFORE changing status (which shows the HUD)
+        var contextTime: Double = 0
         if mode == .command {
+            let contextStart = Date()
             if let text = ContextManager.getSelectedText() {
                 self.contextText = text
                 Logger.info("Context captured: \(text.prefix(50))...")
@@ -343,6 +356,7 @@ class AppState: ObservableObject, HotKeyDelegate {
                 Logger.info("No context captured.")
                 self.contextText = nil 
             }
+            contextTime = Date().timeIntervalSince(contextStart)
         } else {
             self.contextText = nil
         }
@@ -354,6 +368,10 @@ class AppState: ObservableObject, HotKeyDelegate {
         do {
             try recorder.start()
             startKeyPolling()
+            
+            let totalStartLatency = Date().timeIntervalSince(startInit)
+            Logger.info("🚀 Start Latency: Mode=\(mode), ContextCapture=\(String(format: "%.3fs", contextTime)), TotalStart=\(String(format: "%.3fs", totalStartLatency))")
+            
         } catch {
             setError("Failed to start recording: \(error.localizedDescription)")
         }
@@ -407,7 +425,7 @@ class AppState: ObservableObject, HotKeyDelegate {
         status = .transcribing
         
         // 1. Capture State on Main Actor
-        let contextWords = customVocabularyStore.words
+        let contextWords = highPerformanceMode ? [] : customVocabularyStore.words
         let rFillers = removeFillers
         let aPunctuation = addPunctuation
         let uSnippets = useSnippets
@@ -418,6 +436,7 @@ class AppState: ObservableObject, HotKeyDelegate {
         let gKey = groqApiKey
         let cText = contextText
         let llmAvail = isLLMAvailable
+        let isHighPerf = highPerformanceMode
         // Capture dependencies locally to avoid MainActor isolation issues in detached task
         let transcriber = self.transcriber
         let llmService = self.llmService
@@ -427,14 +446,30 @@ class AppState: ObservableObject, HotKeyDelegate {
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self = self else { return }
             
+            let sessionID = UUID().uuidString
+            var decodeTime: Double = 0
+            var prosodyTime: Double = 0
+            var transcriptionTime: Double = 0
+            var llmTime: Double = 0
+            
             do {
+                
                 // --- TRANSCRIPTION ---
                 let txStart = Date()
-                // Use captured 'transcriber'
-                let text = try await transcriber.transcribe(audioFile: url, contextualStrings: contextWords)
-                let txTime = Date().timeIntervalSince(txStart)
-                Logger.info("⏱️ Transcription: \(String(format: "%.2fs", txTime))")
-                Logger.debug("📝 Raw Transcription: '\(text)'")
+                
+                // We need to decode audio separately for prosody analysis
+                let decodeStart = Date()
+                let frames = try AudioUtils.decodeAudioFileToOtherFormat(url: url)
+                decodeTime = Date().timeIntervalSince(decodeStart)
+                let clipDuration = Double(frames.count) / 16000.0 // Assuming 16kHz sample rate
+                
+                let pStart = Date()
+                let analyzer = await MainActor.run { self.prosodyAnalyzer }
+                _ = analyzer.analyze(frames: frames)
+                prosodyTime = Date().timeIntervalSince(pStart)
+                
+                let text = try await transcriber.transcribe(audioFile: url, duration: clipDuration, contextualStrings: contextWords)
+                transcriptionTime = Date().timeIntervalSince(txStart)
                 
                 // --- CLEANUP ---
                 let cleanStart = Date()
@@ -506,7 +541,7 @@ class AppState: ObservableObject, HotKeyDelegate {
                                 }
                             }
                         }
-                        let llmTime = Date().timeIntervalSince(llmStart)
+                        llmTime = Date().timeIntervalSince(llmStart)
                         Logger.info("⏱️ LLM Processing: \(String(format: "%.2fs", llmTime)) [Provider: \(llmProvider.rawValue)]")
                     } else {
                     // Smart Flow disabled - apply dictionary replacements
@@ -526,36 +561,64 @@ class AppState: ObservableObject, HotKeyDelegate {
                 let duration = Date().timeIntervalSince(totalStartTime)
                 
                 // --- FINAL UI UPDATE & PASTE ---
+                // Store timings in local constants to avoid capture warnings
+                let sessID = sessionID
+                let dTime = decodeTime
+                let pTime = prosodyTime
+                let tTime = transcriptionTime
+                let lTime = llmTime
+                let fCount = frames.count
+                let engineName = transcriber.currentProvider.rawValue
+
+                Logger.debug("[AppState] Reached MainActor.run for UI update")
                 await MainActor.run {
                     self.lastTranscript = finalCleaned
                     self.status = .pasting
                     self.processingDuration = duration
                     Logger.info("Total Pipeline: \(String(format: "%.2fs", duration))")
                     
-                    // Trigger Paste Logic
+                    // Trigger Paste Logic - use non-isolated Task to avoid blocking MainActor
                     Task {
-                        // Capture focus before paste for correction learning
-                        // Use a timeout (200ms) to prevent hanging if target app is unresponsive
-                        var focusInfo: FocusInfo? = nil
-                        do {
-                            focusInfo = try await withThrowingTaskGroup(of: FocusInfo?.self) { group in
-                                group.addTask {
-                                    return await FocusCapture.captureCurrentFocus()
-                                }
-                                group.addTask {
-                                    try await Task.sleep(nanoseconds: 200_000_000)
-                                    throw CancellationError()
-                                }
-                                let result = try await group.next()
-                                group.cancelAll()
-                                return result ?? nil
-                            }
-                        } catch {
-                            Logger.warning("[AppState] Focus capture timed out, proceeding with paste")
-                        }
+                        Logger.debug("[AppState] Starting injection task")
+                        let injectionStart = Date()
                         
+                        // racing timeout for focus capture, detached to avoid MainActor stalls
+                        let focusInfo: FocusInfo? = isHighPerf ? nil : await Task.detached {
+                            await withCheckedContinuation { (continuation: CheckedContinuation<FocusInfo?, Never>) in
+                                final class State { var isResumed = false }
+                                let state = State()
+                                let lock = NSLock()
+                                
+                                let timeoutTask = Task {
+                                    try? await Task.sleep(nanoseconds: 200_000_000)
+                                    lock.lock()
+                                    defer { lock.unlock() }
+                                    if !state.isResumed {
+                                        state.isResumed = true
+                                        continuation.resume(returning: nil)
+                                    }
+                                }
+                                
+                                Task {
+                                    let info = await FocusCapture.captureCurrentFocus()
+                                    lock.lock()
+                                    defer { lock.unlock() }
+                                    if !state.isResumed {
+                                        state.isResumed = true
+                                        timeoutTask.cancel()
+                                        continuation.resume(returning: info)
+                                    }
+                                }
+                            }
+                        }.value
+
                         TextInjector.inject(text: finalCleaned)
+                        let injectTime = Date().timeIntervalSince(injectionStart)
                         Logger.info("⏱️ Injection completed")
+                        
+                        await MainActor.run {
+                            self.status = .idle
+                        }
                         
                         // Start correction session
                         if let info = focusInfo, !finalCleaned.isEmpty {
@@ -569,6 +632,20 @@ class AppState: ObservableObject, HotKeyDelegate {
                             // Store reference on MainActor
                             self.activeCorrectionSession = session
                         }
+
+                        // Record to SQLite
+                        LatencyTracker.shared.record(
+                            sessionID: sessID,
+                            clipDuration: Double(fCount) / 16000.0,
+                            decodeTime: dTime,
+                            prosodyTime: pTime,
+                            transcriptionTime: tTime,
+                            llmTime: lTime,
+                            injectionTime: injectTime,
+                            totalLatency: duration,
+                            engine: engineName,
+                            mode: cInputMode.description
+                        )
                         
                         try? await Task.sleep(nanoseconds: 1_000_000_000)
                         self.status = .idle
@@ -577,6 +654,25 @@ class AppState: ObservableObject, HotKeyDelegate {
                 
             } catch {
                 let errorMsg = error.localizedDescription
+                
+                // Record failure metrics
+                let totalFailDuration = Date().timeIntervalSince(totalStartTime)
+                // We might not have frames count here easily if it failed before decode, but we can default
+                LatencyTracker.shared.record(
+                    sessionID: sessionID,
+                    clipDuration: 0, // Approximate or 0
+                    decodeTime: decodeTime,
+                    prosodyTime: prosodyTime,
+                    transcriptionTime: transcriptionTime,
+                    llmTime: llmTime,
+                    injectionTime: 0,
+                    totalLatency: totalFailDuration,
+                    engine: transcriber.currentProvider.rawValue,
+                    mode: cInputMode.description, // captured from outer scope
+                    status: "error",
+                    errorMessage: errorMsg
+                )
+                
                 Logger.error("Processing failed: \(errorMsg)")
                 await MainActor.run {
                     self.setError(errorMsg)

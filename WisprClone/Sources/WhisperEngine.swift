@@ -13,12 +13,15 @@ class WhisperEngine: TranscriptionEngine {
         self.whisper = Whisper(fromFileURL: modelUrl, withParams: params)
     }
     
-    func transcribe(audioFile: URL, contextualStrings: [String]) async throws -> String {
+    func transcribe(audioFile: URL, duration: Double, contextualStrings: [String]) async throws -> String {
         guard let whisper = whisper else {
             throw NSError(domain: "WhisperEngine", code: 1, userInfo: [NSLocalizedDescriptionKey: "Whisper model not initialized"])
         }
         
-        // Strict 10s timeout per spec
+        // Dynamic Timeout: 5s overhead + 1.0x duration
+        let timeout = max(5.0, duration * 1.0) + 5.0
+        Logger.debug("Using dynamic timeout (Whisper): \(String(format: "%.1fs", timeout))")
+        
         return try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask {
                 let decodeStart = Date()
@@ -35,8 +38,9 @@ class WhisperEngine: TranscriptionEngine {
             }
             
             group.addTask {
-                try await Task.sleep(nanoseconds: 30 * 1_000_000_000) // matches AppleSpeechEngine
-                throw NSError(domain: "WhisperEngine", code: 2, userInfo: [NSLocalizedDescriptionKey: "Whisper transcription timed out (30s)."])
+                let nanoseconds = UInt64(timeout * 1_000_000_000)
+                try await Task.sleep(nanoseconds: nanoseconds)
+                throw NSError(domain: "WhisperEngine", code: 2, userInfo: [NSLocalizedDescriptionKey: "Whisper transcription timed out (\(Int(timeout))s)."])
             }
             
             let result = try await group.next()!

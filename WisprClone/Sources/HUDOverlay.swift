@@ -30,7 +30,11 @@ class HUDOverlay: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
     
+    private var isSetup = false
+    
     func setup(appState: AppState) {
+        guard !isSetup else { return }
+        
         let view = WaveformView(appState: appState)
         let hostingView = NSHostingView(rootView: view)
         hostingView.wantsLayer = true
@@ -50,6 +54,8 @@ class HUDOverlay: NSWindowController {
             let y = screenRect.minY + 50
             self.window?.setFrame(NSRect(origin: CGPoint(x: x, y: y), size: newSize), display: true)
         }
+        
+        isSetup = true
     }
     
     func show() {

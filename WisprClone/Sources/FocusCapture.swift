@@ -19,6 +19,8 @@ class FocusCapture {
         return await Task.detached(priority: .userInitiated) {
             // Get system-wide element
             let systemWide = AXUIElementCreateSystemWide()
+
+
             
             // Get focused application
             var focusedAppValue: CFTypeRef?
