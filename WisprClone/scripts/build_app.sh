@@ -5,7 +5,8 @@ set -e
 xattr -cr Sources || true
 
 APP_NAME="WisprClone"
-DESKTOP_APP="/Users/pramodnammi/Desktop/$APP_NAME.app"
+# Install outside iCloud-synced folders (Desktop/Documents), where macOS can evict files
+INSTALLED_APP="/Applications/$APP_NAME.app"
 APP_BUNDLE="$PWD/$APP_NAME.app"
 
 echo "🧹 Cleaning up old processes..."
@@ -46,10 +47,10 @@ cp -R "$TMP_APP" "$APP_BUNDLE"
 
 echo "✅ App Bundle Created at: $APP_BUNDLE"
 
-# Sync with Desktop bundle
-echo "🔄 Updating Desktop version..."
-rm -rf "$DESKTOP_APP"
-cp -R "$APP_BUNDLE" "$DESKTOP_APP"
+# Install into /Applications
+echo "🔄 Installing to $INSTALLED_APP..."
+rm -rf "$INSTALLED_APP"
+cp -R "$APP_BUNDLE" "$INSTALLED_APP"
 
 echo "👉 Launching app..."
-open "$DESKTOP_APP"
+open "$INSTALLED_APP"
