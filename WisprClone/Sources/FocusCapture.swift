@@ -9,56 +9,63 @@ struct FocusInfo {
     let initialValue: String?
 }
 
-/// Module to capture the focused text element before paste
+/// Module to capture the focused text element for correction learning
 class FocusCapture {
+    
+    /// Upper bound for a single AX call into another app. The system default is ~6s, and slow
+    /// targets (Electron/Chrome apps, huge documents) regularly take seconds to answer.
+    static let messagingTimeout: Float = 0.5
+    
+    /// Apply `messagingTimeout` to every AX element this process uses. Call once at launch.
+    static func configureMessagingTimeout() {
+        AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), messagingTimeout)
+    }
     
     /// Capture the currently focused element and its context
     /// Returns nil if focus cannot be captured (no permission, no focused element, etc.)
-    /// Runs on a detached task to avoid blocking the main thread if AX calls hang
-    static func captureCurrentFocus() async -> FocusInfo? {
-        return await Task.detached(priority: .userInitiated) {
-            // Get system-wide element
-            let systemWide = AXUIElementCreateSystemWide()
-            
-            // Get focused application
-            var focusedAppValue: CFTypeRef?
-            let appResult = AXUIElementCopyAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, &focusedAppValue)
-            
-            guard appResult == .success, let focusedApp = focusedAppValue else {
-                Logger.warning("[FocusCapture] Failed to get focused application: \(appResult.rawValue)")
-                return nil
-            }
-            
-            let appElement = focusedApp as! AXUIElement
-            
-            // Get PID of focused app
-            var pid: pid_t = 0
-            AXUIElementGetPid(appElement, &pid)
-            
-            // Get bundle ID
-            let bundleID = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
-            
-            // Get focused UI element (text field/view)
-            var focusedElementValue: CFTypeRef?
-            let elementResult = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedElementValue)
-            
-            guard elementResult == .success, let focusedElement = focusedElementValue else {
-                Logger.debug("Failed to get focused element: \(elementResult.rawValue)")
-                return nil
-            }
-            
-            let element = focusedElement as! AXUIElement
-            
-            // Try to read initial value (best-effort)
-            let initialValue = readValue(from: element)
-            
-            return FocusInfo(
-                element: element,
-                pid: pid,
-                bundleID: bundleID,
-                initialValue: initialValue
-            )
-        }.value
+    /// Makes blocking AX calls - never call this on the main thread.
+    static func captureCurrentFocus() -> FocusInfo? {
+        // Get system-wide element
+        let systemWide = AXUIElementCreateSystemWide()
+        
+        // Get focused application
+        var focusedAppValue: CFTypeRef?
+        let appResult = AXUIElementCopyAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, &focusedAppValue)
+        
+        guard appResult == .success, let focusedApp = focusedAppValue else {
+            Logger.warning("[FocusCapture] Failed to get focused application: \(appResult.rawValue)")
+            return nil
+        }
+        
+        let appElement = focusedApp as! AXUIElement
+        
+        // Get PID of focused app
+        var pid: pid_t = 0
+        AXUIElementGetPid(appElement, &pid)
+        
+        // Get bundle ID
+        let bundleID = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
+        
+        // Get focused UI element (text field/view)
+        var focusedElementValue: CFTypeRef?
+        let elementResult = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedElementValue)
+        
+        guard elementResult == .success, let focusedElement = focusedElementValue else {
+            Logger.debug("Failed to get focused element: \(elementResult.rawValue)")
+            return nil
+        }
+        
+        let element = focusedElement as! AXUIElement
+        
+        // Try to read initial value (best-effort)
+        let initialValue = readValue(from: element)
+        
+        return FocusInfo(
+            element: element,
+            pid: pid,
+            bundleID: bundleID,
+            initialValue: initialValue
+        )
     }
     
     /// Read the current value from an AX element
@@ -84,7 +91,7 @@ class FocusCapture {
             return selected
         }
         
-        print("[FocusCapture] Could not read value from element: \(result.rawValue)")
+        Logger.debug("[FocusCapture] Could not read value from element: \(result.rawValue)")
         return nil
     }
     

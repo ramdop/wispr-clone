@@ -33,6 +33,13 @@ enum WhisperModel: String, Codable, CaseIterable {
     }
 }
 
+/// Mic level for the recording waveform. Kept out of AppState so ~20 Hz level updates
+/// only re-render the waveform, not every view observing AppState.
+@MainActor
+final class AudioLevelMeter: ObservableObject {
+    @Published var level: Float = 0.0
+}
+
 @MainActor
 class AppState: ObservableObject, HotKeyDelegate {
     @Published var status: AppStatus = .idle {
@@ -68,11 +75,21 @@ class AppState: ObservableObject, HotKeyDelegate {
         }
     }
     
+    /// Editable so a Groq model retirement is a settings change, not a rebuild
+    @Published var groqModel: String = UserDefaults.standard.string(forKey: "groqModel") ?? GroqProvider.defaultModel {
+        didSet {
+            UserDefaults.standard.set(groqModel, forKey: "groqModel")
+        }
+    }
+    
+    /// Set when Smart Flow failed and the transcript was pasted unformatted; cleared on the next dictation
+    @Published var smartFlowWarning: String?
+    
     @Published var hasMicAccess: Bool = false
     @Published var hasSpeechAccess: Bool = false
     @Published var hasAccessibilityAccess: Bool = false
     
-    @Published var audioLevel: Float = 0.0
+    let audioMeter = AudioLevelMeter()
     @Published var processingDuration: Double?
     
     // LLM & Snippets
@@ -81,9 +98,18 @@ class AppState: ObservableObject, HotKeyDelegate {
     @Published var snippetStore = SnippetStore()
     @Published var customVocabularyStore = CustomVocabularyStore()
     @Published var learnedDictionaryStore = LearnedDictionaryStore()
+    private let latencyTracker = LatencyTracker.shared
     
     // Active correction session
     private var activeCorrectionSession: CorrectionSession?
+    // Bumped per paste so a slow focus capture can't start a session for an older paste
+    private var correctionGeneration = 0
+    
+    @Published var highPerformanceMode: Bool = UserDefaults.standard.bool(forKey: "highPerformanceMode") {
+        didSet {
+            UserDefaults.standard.set(highPerformanceMode, forKey: "highPerformanceMode")
+        }
+    }
     
     @Published var useSnippets: Bool = true {
         didSet {
@@ -154,6 +180,9 @@ class AppState: ObservableObject, HotKeyDelegate {
     private var notificationTimer: Timer?
     
     init() {
+        // Bound every AX call into other apps (system default is ~6s per call)
+        FocusCapture.configureMessagingTimeout()
+        
         // Load preferences
         if let savedEngine = UserDefaults.standard.string(forKey: "selectedEngine"),
            let engine = TranscriptionProvider(rawValue: savedEngine) {
@@ -288,9 +317,10 @@ class AppState: ObservableObject, HotKeyDelegate {
             }
         }
         
-        recorder.onAudioLevelUpdate = { [weak self] level in
-            Task { @MainActor in
-                self?.audioLevel = level
+        let meter = audioMeter
+        recorder.onAudioLevelUpdate = { level in
+            DispatchQueue.main.async {
+                meter.level = level
             }
         }
     }
@@ -319,6 +349,8 @@ class AppState: ObservableObject, HotKeyDelegate {
     private var keyReleaseCount: Int = 0
     
     func startRecording(mode: InputMode = .dictation) {
+        let startInit = Date()
+        
         // Allow recording from idle or any error state
         switch status {
         case .idle, .error:
@@ -329,13 +361,16 @@ class AppState: ObservableObject, HotKeyDelegate {
         
         guard permissions.hasMicrophoneAccess else {
             setError("Microphone access missing")
+            requestPermissions() // Proactively request if not granted
             return
         }
         
         currentInputMode = mode
         
         // FIRST: Capture context BEFORE changing status (which shows the HUD)
+        var contextTime: Double = 0
         if mode == .command {
+            let contextStart = Date()
             if let text = ContextManager.getSelectedText() {
                 self.contextText = text
                 Logger.info("Context captured: \(text.prefix(50))...")
@@ -343,41 +378,47 @@ class AppState: ObservableObject, HotKeyDelegate {
                 Logger.info("No context captured.")
                 self.contextText = nil 
             }
+            contextTime = Date().timeIntervalSince(contextStart)
         } else {
             self.contextText = nil
         }
         
         // THEN: Update status (this triggers HUD show)
+        audioMeter.level = 0
         status = .recording
         processingDuration = nil // Reset duration
         playHaptic()
         do {
             try recorder.start()
             startKeyPolling()
+            
+            let totalStartLatency = Date().timeIntervalSince(startInit)
+            Logger.info("🚀 Start Latency: Mode=\(mode), ContextCapture=\(String(format: "%.3fs", contextTime)), TotalStart=\(String(format: "%.3fs", totalStartLatency))")
         } catch {
             setError("Failed to start recording: \(error.localizedDescription)")
         }
     }
     
+    /// Backup for the Carbon hotkey-released event (primary stop signal, handled in hotKeyUp),
+    /// which is unreliable for modifier chords.
     private func startKeyPolling() {
         keyReleaseCount = 0
         keyPollingTimer?.invalidate()
-        keyPollingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
-            guard let self = self else { return timer.invalidate() }
-            
-            // Use HID System State (Hardware) for truth
-            let isSpaceDown = CGEventSource.keyState(.hidSystemState, key: CGKeyCode(kVK_Space))
-            
-            if isSpaceDown {
-                Task { @MainActor in
+        // Timer fires on the main run loop
+        keyPollingTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                guard let self = self else { return timer.invalidate() }
+                
+                // Use HID System State (Hardware) for truth
+                let isSpaceDown = CGEventSource.keyState(.hidSystemState, key: CGKeyCode(kVK_Space))
+                
+                if isSpaceDown {
                     self.keyReleaseCount = 0
-                }
-            } else {
-                Task { @MainActor in
+                } else {
                     self.keyReleaseCount += 1
-                    // Debounce: require 3 consecutive hits (0.3s) of "key up" to stop
+                    // Debounce: require 3 consecutive hits (~90ms) of "key up" to stop
                     // This prevents premature stops from HID polling glitches while
-                    // ensuring we stop even if the Carbon event is lost.
+                    // ensuring we stop quickly even if the Carbon event is lost.
                     if self.keyReleaseCount >= 3 {
                         Logger.debug("Polling (HID): Spacebar released (debounced). Stopping.")
                         self.stopRecording()
@@ -407,7 +448,9 @@ class AppState: ObservableObject, HotKeyDelegate {
         status = .transcribing
         
         // 1. Capture State on Main Actor
-        let contextWords = customVocabularyStore.words
+        let contextWords = highPerformanceMode ? [] : customVocabularyStore.words
+        // Spellings to bias recognition toward: custom vocabulary plus learned canonical terms
+        let recognitionHints = highPerformanceMode ? [] : contextWords + learnedDictionaryStore.entries.map { $0.canonical }
         let rFillers = removeFillers
         let aPunctuation = addPunctuation
         let uSnippets = useSnippets
@@ -416,8 +459,12 @@ class AppState: ObservableObject, HotKeyDelegate {
         let llmProvider = selectedLLMProvider
         let oaiKey = openaiApiKey
         let gKey = groqApiKey
+        let gModel = groqModel
         let cText = contextText
         let llmAvail = isLLMAvailable
+        let isHighPerf = highPerformanceMode
+        let engineName = transcriber.currentProvider.rawValue
+        let latencyTracker = self.latencyTracker
         // Capture dependencies locally to avoid MainActor isolation issues in detached task
         let transcriber = self.transcriber
         let llmService = self.llmService
@@ -427,13 +474,20 @@ class AppState: ObservableObject, HotKeyDelegate {
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self = self else { return }
             
+            let sessionID = UUID().uuidString
+            // Header read only (no decode), so this adds nothing measurable to the pipeline
+            let clipDuration = AudioUtils.duration(of: url)
+            var transcriptionTime: Double = 0
+            var llmTime: Double = 0
+            var smartFlowError: String?
+            
             do {
                 // --- TRANSCRIPTION ---
                 let txStart = Date()
                 // Use captured 'transcriber'
-                let text = try await transcriber.transcribe(audioFile: url, contextualStrings: contextWords)
-                let txTime = Date().timeIntervalSince(txStart)
-                Logger.info("⏱️ Transcription: \(String(format: "%.2fs", txTime))")
+                let text = try await transcriber.transcribe(audioFile: url, duration: clipDuration, contextualStrings: recognitionHints)
+                transcriptionTime = Date().timeIntervalSince(txStart)
+                Logger.info("⏱️ Transcription: \(String(format: "%.2fs", transcriptionTime))")
                 Logger.debug("📝 Raw Transcription: '\(text)'")
                 
                 // --- CLEANUP ---
@@ -458,7 +512,12 @@ class AppState: ObservableObject, HotKeyDelegate {
                     if uSmartFlow || cInputMode == .command {
                         let llmStart = Date()
                         if llmProvider == .ollama && !llmAvail {
+                            if cInputMode == .command {
+                                // Never paste the spoken instruction over the user's selection
+                                throw NSError(domain: "WisprClone", code: 503, userInfo: [NSLocalizedDescriptionKey: "Command Mode Failed: Ollama not running."])
+                            }
                             Logger.warning("Smart Flow skipped: Ollama unavailable")
+                            smartFlowError = "Ollama not running"
                         } else {
                             // Update status to processing on Main Thread
                             await MainActor.run {
@@ -475,13 +534,14 @@ class AppState: ObservableObject, HotKeyDelegate {
                                     Input Instruction: "\(cleaned)"
                                     """
                                     // Use captured 'llmService'
-                                    cleaned = try await llmService.process(combinedInput, provider: llmProvider, apiKey: key, template: .command)
+                                    cleaned = try await llmService.process(combinedInput, provider: llmProvider, apiKey: key, template: .command, model: gModel)
                                 } else {
                                     Logger.error("Command Mode Error: No context to operate on.")
                                     throw NSError(domain: "WisprClone", code: 404, userInfo: [NSLocalizedDescriptionKey: "Command Mode Failed: No text selected."])
                                 }
                             } else {
                                 // Use dictionary-aware template if we have learned entries or custom vocabulary
+                                let template: PromptTemplate
                                 if !dictEntries.isEmpty || !contextWords.isEmpty {
                                     // Format dictionary entries for LLM
                                     let dictText = dictEntries.map { entry in
@@ -498,15 +558,24 @@ class AppState: ObservableObject, HotKeyDelegate {
                                             .replacingOccurrences(of: "%CUSTOM_VOCABULARIES%", with: vocabText.isEmpty ? "None" : vocabText)
                                     )
                                     Logger.info("📚 Including \(dictEntries.count) dict entries and \(contextWords.count) vocab words in LLM prompt")
-                                    
-                                    cleaned = try await llmService.process(cleaned, provider: llmProvider, apiKey: key, template: templateWithDict)
+                                    template = templateWithDict
                                 } else {
                                     // No dictionary entries and no custom vocab, use standard template
-                                    cleaned = try await llmService.process(cleaned, provider: llmProvider, apiKey: key)
+                                    template = .smartList
+                                }
+                                
+                                // Dictation never fails because of Smart Flow: on any LLM error, paste the
+                                // cleaned transcript unformatted. (Command mode still fails above - pasting the
+                                // spoken instruction over the user's selection would be destructive.)
+                                do {
+                                    cleaned = try await llmService.process(cleaned, provider: llmProvider, apiKey: key, template: template, model: gModel)
+                                } catch {
+                                    smartFlowError = error.localizedDescription
+                                    Logger.warning("Smart Flow failed, pasting unformatted transcript: \(error.localizedDescription)")
                                 }
                             }
                         }
-                        let llmTime = Date().timeIntervalSince(llmStart)
+                        llmTime = Date().timeIntervalSince(llmStart)
                         Logger.info("⏱️ LLM Processing: \(String(format: "%.2fs", llmTime)) [Provider: \(llmProvider.rawValue)]")
                     } else {
                     // Smart Flow disabled - apply dictionary replacements
@@ -524,59 +593,70 @@ class AppState: ObservableObject, HotKeyDelegate {
                 
                 let finalCleaned = cleaned
                 let duration = Date().timeIntervalSince(totalStartTime)
+                let tTime = transcriptionTime
+                let lTime = llmTime
+                let sfError = smartFlowError
                 
                 // --- FINAL UI UPDATE & PASTE ---
                 await MainActor.run {
                     self.lastTranscript = finalCleaned
-                    self.status = .pasting
+                    self.smartFlowWarning = sfError
                     self.processingDuration = duration
                     Logger.info("Total Pipeline: \(String(format: "%.2fs", duration))")
                     
-                    // Trigger Paste Logic
-                    Task {
-                        // Capture focus before paste for correction learning
-                        // Use a timeout (200ms) to prevent hanging if target app is unresponsive
-                        var focusInfo: FocusInfo? = nil
-                        do {
-                            focusInfo = try await withThrowingTaskGroup(of: FocusInfo?.self) { group in
-                                group.addTask {
-                                    return await FocusCapture.captureCurrentFocus()
-                                }
-                                group.addTask {
-                                    try await Task.sleep(nanoseconds: 200_000_000)
-                                    throw CancellationError()
-                                }
-                                let result = try await group.next()
-                                group.cancelAll()
-                                return result ?? nil
-                            }
-                        } catch {
-                            Logger.warning("[AppState] Focus capture timed out, proceeding with paste")
-                        }
-                        
+                    // Paste first. Focus capture for correction learning makes blocking AX calls into
+                    // the target app, so it runs afterwards and off the main thread.
+                    var injectTime: Double = 0
+                    if !finalCleaned.isEmpty {
+                        self.status = .pasting
+                        let injectionStart = Date()
                         TextInjector.inject(text: finalCleaned)
+                        injectTime = Date().timeIntervalSince(injectionStart)
                         Logger.info("⏱️ Injection completed")
-                        
-                        // Start correction session
-                        if let info = focusInfo, !finalCleaned.isEmpty {
-                            let session = CorrectionSession(injectedText: finalCleaned, focusInfo: info)
-                            session.start { [weak self] result in
-                                guard let result = result else { return }
-                                Task { @MainActor in
-                                    self?.processCorrectionResult(result)
-                                }
-                            }
-                            // Store reference on MainActor
-                            self.activeCorrectionSession = session
+                        // High Performance mode skips AX focus capture (and so correction learning)
+                        if !isHighPerf {
+                            self.beginCorrectionLearning(injectedText: finalCleaned)
                         }
-                        
-                        try? await Task.sleep(nanoseconds: 1_000_000_000)
-                        self.status = .idle
                     }
+                    
+                    // Ready for the next dictation immediately
+                    self.status = .idle
+                    
+                    // Written on the tracker's own background queue
+                    latencyTracker.record(
+                        sessionID: sessionID,
+                        clipDuration: clipDuration,
+                        decodeTime: 0,
+                        prosodyTime: 0,
+                        transcriptionTime: tTime,
+                        llmTime: lTime,
+                        injectionTime: injectTime,
+                        totalLatency: duration,
+                        engine: engineName,
+                        mode: cInputMode.description,
+                        errorMessage: sfError.map { "Smart Flow: \($0)" }
+                    )
                 }
                 
             } catch {
                 let errorMsg = error.localizedDescription
+                
+                // Record failure metrics
+                latencyTracker.record(
+                    sessionID: sessionID,
+                    clipDuration: clipDuration,
+                    decodeTime: 0,
+                    prosodyTime: 0,
+                    transcriptionTime: transcriptionTime,
+                    llmTime: llmTime,
+                    injectionTime: 0,
+                    totalLatency: Date().timeIntervalSince(totalStartTime),
+                    engine: engineName,
+                    mode: cInputMode.description,
+                    status: "error",
+                    errorMessage: errorMsg
+                )
+                
                 Logger.error("Processing failed: \(errorMsg)")
                 await MainActor.run {
                     self.setError(errorMsg)
@@ -589,16 +669,14 @@ class AppState: ObservableObject, HotKeyDelegate {
     }
     
     private func updateHUD() {
-        Task { @MainActor in
-            // Lazy setup
-            HUDOverlay.shared.setup(appState: self)
-            
-            switch status {
-            case .idle, .error:
-                HUDOverlay.shared.hide()
-            case .recording, .transcribing, .processing, .pasting:
-                HUDOverlay.shared.show()
-            }
+        // Lazy one-time setup
+        HUDOverlay.shared.setup(appState: self)
+        
+        switch status {
+        case .idle, .error:
+            HUDOverlay.shared.hide()
+        case .recording, .transcribing, .processing, .pasting:
+            HUDOverlay.shared.show()
         }
     }
     
@@ -684,6 +762,26 @@ class AppState: ObservableObject, HotKeyDelegate {
     
     // MARK: - Correction Learning
     
+    /// Capture the focused field off the main thread, then watch it for user corrections
+    private func beginCorrectionLearning(injectedText: String) {
+        // A new paste supersedes any session still watching the previous one
+        activeCorrectionSession?.cancel()
+        activeCorrectionSession = nil
+        correctionGeneration += 1
+        let generation = correctionGeneration
+        
+        Task.detached(priority: .utility) { [weak self] in
+            guard let focusInfo = FocusCapture.captureCurrentFocus() else {
+                Logger.debug("[CorrectionLearning] No focused element captured; skipping session")
+                return
+            }
+            await MainActor.run {
+                guard let self = self, self.correctionGeneration == generation else { return }
+                self.startCorrectionSession(injectedText: injectedText, focusInfo: focusInfo)
+            }
+        }
+    }
+    
     private func startCorrectionSession(injectedText: String, focusInfo: FocusInfo) {
         // Cancel any existing session
         activeCorrectionSession?.cancel()
@@ -691,11 +789,15 @@ class AppState: ObservableObject, HotKeyDelegate {
         let session = CorrectionSession(injectedText: injectedText, focusInfo: focusInfo)
         activeCorrectionSession = session
         
-        session.start { [weak self] result in
-            guard let self = self, let result = result else { return }
-            
+        session.start { [weak self, weak session] result in
             Task { @MainActor in
-                self.processCorrectionResult(result)
+                guard let self = self else { return }
+                if let session = session, self.activeCorrectionSession === session {
+                    self.activeCorrectionSession = nil
+                }
+                if let result = result {
+                    self.processCorrectionResult(result)
+                }
             }
         }
     }

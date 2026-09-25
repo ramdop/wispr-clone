@@ -3,6 +3,7 @@
 
 # Build Artifacts
 build/
+.build/
 DerivedData/
 *.app/
 WisprClone.app/
@@ -19,6 +20,9 @@ temp_recording_*
 check_log.swift
 debug_dict.swift
 dump_dict.swift
+
+# Xcode per-user state
+xcuserdata/
 
 # Config/Secrets (if any)
 .env

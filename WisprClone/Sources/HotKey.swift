@@ -1,9 +1,16 @@
 import Carbon
 import Foundation
 
-enum InputMode {
+enum InputMode: CustomStringConvertible {
     case dictation
     case command
+    
+    var description: String {
+        switch self {
+        case .dictation: return "dictation"
+        case .command: return "command"
+        }
+    }
 }
 
 protocol HotKeyDelegate: AnyObject {

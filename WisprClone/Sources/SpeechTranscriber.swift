@@ -2,7 +2,7 @@ import Speech
 import Foundation
 
 protocol TranscriptionEngine {
-    func transcribe(audioFile: URL, contextualStrings: [String]) async throws -> String
+    func transcribe(audioFile: URL, duration: Double, contextualStrings: [String]) async throws -> String
 }
 
 enum TranscriptionProvider: String, Codable {
@@ -12,8 +12,10 @@ enum TranscriptionProvider: String, Codable {
 
 class SpeechTranscriber {
     private var engine: TranscriptionEngine
+    var currentProvider: TranscriptionProvider
     
     init(provider: TranscriptionProvider = .apple) {
+        self.currentProvider = provider
         switch provider {
         case .apple:
             self.engine = AppleSpeechEngine()
@@ -24,6 +26,7 @@ class SpeechTranscriber {
     }
     
     func setProvider(_ provider: TranscriptionProvider, modelUrl: URL? = nil) {
+        self.currentProvider = provider
         switch provider {
         case .apple:
             self.engine = AppleSpeechEngine()
@@ -38,8 +41,8 @@ class SpeechTranscriber {
         }
     }
     
-    func transcribe(audioFile: URL, contextualStrings: [String] = []) async throws -> String {
-        return try await engine.transcribe(audioFile: audioFile, contextualStrings: contextualStrings)
+    func transcribe(audioFile: URL, duration: Double, contextualStrings: [String] = []) async throws -> String {
+        return try await engine.transcribe(audioFile: audioFile, duration: duration, contextualStrings: contextualStrings)
     }
 }
 
@@ -52,7 +55,7 @@ class AppleSpeechEngine: TranscriptionEngine {
         self.recognizer = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
     
-    func transcribe(audioFile: URL, contextualStrings: [String]) async throws -> String {
+    func transcribe(audioFile: URL, duration: Double, contextualStrings: [String]) async throws -> String {
         guard let recognizer = recognizer else {
             throw NSError(domain: "AppleSpeechEngine", code: 1, userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer not available"])
         }
@@ -61,74 +64,103 @@ class AppleSpeechEngine: TranscriptionEngine {
             throw NSError(domain: "AppleSpeechEngine", code: 2, userInfo: [NSLocalizedDescriptionKey: "Recognizer is currently unavailable"])
         }
         
-        // Race transcription against a timeout using strict concurrency
-        return try await withThrowingTaskGroup(of: String.self) { group in
-            // Task 1: Transcription
-            group.addTask {
-                return try await self.performTranscription(recognizer: recognizer, audioFile: audioFile, contextualStrings: contextualStrings)
-            }
-            
-            // Task 2: Timeout (30 seconds)
-            group.addTask {
-                try await Task.sleep(nanoseconds: 30 * 1_000_000_000)
-                throw NSError(domain: "AppleSpeechEngine", code: 3, userInfo: [NSLocalizedDescriptionKey: "Transcription timed out (30s)."])
-            }
-            
-            // Wait for the first one to complete
-            guard let result = try await group.next() else {
-                throw NSError(domain: "AppleSpeechEngine", code: 4, userInfo: [NSLocalizedDescriptionKey: "Transcription failed unexpectedly"])
-            }
-            
-            // Cancel remaining tasks (i.e. if transcription success, cancel timeout; if timeout, cancel transcription)
-            group.cancelAll()
-            return result
+        // Dynamic Timeout: 5s overhead + 1.0x duration
+        // e.g., 2s audio -> 10s timeout
+        // e.g., 20s audio -> 25s timeout
+        let timeout = max(5.0, duration * 1.0) + 5.0
+        Logger.debug("Using dynamic timeout: \(String(format: "%.1fs", timeout)) for duration: \(String(format: "%.1fs", duration))")
+        
+        // Real timeout: returns at the deadline even if the recognizer never calls back
+        return try await withTimeout(
+            seconds: timeout,
+            timeoutError: { NSError(domain: "AppleSpeechEngine", code: 3, userInfo: [NSLocalizedDescriptionKey: "Transcription timed out (\(Int(timeout))s)."]) }
+        ) { () async throws -> String in
+            try await self.performTranscription(recognizer: recognizer, audioFile: audioFile, contextualStrings: contextualStrings)
         }
     }
     
     private func performTranscription(recognizer: SFSpeechRecognizer, audioFile: URL, contextualStrings: [String]) async throws -> String {
+        let state = RecognitionState()
         return try await withTaskCancellationHandler {
-            return try await withCheckedThrowingContinuation { continuation in
-                let request = SFSpeechURLRecognitionRequest(url: audioFile)
-                request.shouldReportPartialResults = false
-                
-                if recognizer.supportsOnDeviceRecognition {
-                    // Try on-device but allow network fallback for better results on long dictations
-                    request.requiresOnDeviceRecognition = false 
-                }
-                
-                // Contextual strings from both default hardcoded list and user custom vocabulary
-                let combinedContext = contextualStrings
-                
-                request.contextualStrings = combinedContext
-                Logger.debug("SFSpeech: Added \(combinedContext.count) contextual strings (Requested OnDevice: false)")
-                
-                let task = recognizer.recognitionTask(with: request) { result, error in
-                    if let error = error {
-                        continuation.resume(throwing: error)
-                        return
+            try await withCheckedThrowingContinuation { continuation in
+                state.begin(continuation) {
+                    let request = SFSpeechURLRecognitionRequest(url: audioFile)
+                    request.shouldReportPartialResults = false
+                    
+                    if recognizer.supportsOnDeviceRecognition {
+                        // Prefer on-device for speed and stability
+                        request.requiresOnDeviceRecognition = true
                     }
                     
-                    if let result = result {
-                        if result.isFinal {
+                    request.contextualStrings = contextualStrings
+                    Logger.debug("SFSpeech: Added \(contextualStrings.count) contextual strings (OnDevice: \(request.requiresOnDeviceRecognition))")
+                    
+                    return recognizer.recognitionTask(with: request) { result, error in
+                        if let error = error {
+                            state.finish(.failure(error))
+                            return
+                        }
+                        
+                        if let result = result, result.isFinal {
                             Logger.debug("SFSpeech: Final result received: \(result.bestTranscription.formattedString.prefix(50))...")
-                            continuation.resume(returning: result.bestTranscription.formattedString)
-                        } else {
-                            Logger.debug("SFSpeech: Partial result: \(result.bestTranscription.formattedString.prefix(30))...")
+                            state.finish(.success(result.bestTranscription.formattedString))
                         }
                     }
                 }
-                
-                // Store task reference? context is complicated in closure
-                // Ideally we'd cancel 'task' in onCancel, but we can't easily extract it from the local scope here 
-                // without a class wrapper or strict concurrency gymnastics.
-                // However, separating `recognitionTask` creation ensures cleaner looking code.
-                // For now, since `SFSpeech` handles cancellation somewhat gracefully, we rely on the group cancellation 
-                // to ignore the result, but typically we should call task.cancel().
-                // To do this simply: we let it run. The proper way requires an external state holder.
-                // Given the constraints, just ensuring the group returns early is enough to unblock the UI.
             }
         } onCancel: {
             Logger.debug("SFSpeech: Transcription task cancelled")
+            state.cancel()
         }
+    }
+}
+
+/// Owns the continuation and the SFSpeechRecognitionTask so that the continuation is resumed
+/// exactly once (the recognizer can call back more than once) and cancellation actually
+/// stops recognition instead of leaving it running.
+private final class RecognitionState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<String, Error>?
+    private var task: SFSpeechRecognitionTask?
+    private var cancelled = false
+    
+    func begin(_ continuation: CheckedContinuation<String, Error>, start: () -> SFSpeechRecognitionTask) {
+        lock.lock()
+        if cancelled {
+            lock.unlock()
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+        
+        let task = start()
+        
+        lock.lock()
+        self.task = task
+        let wasCancelled = cancelled
+        lock.unlock()
+        if wasCancelled {
+            task.cancel()
+        }
+    }
+    
+    func finish(_ result: Result<String, Error>) {
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(with: result)
+    }
+    
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let task = self.task
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        task?.cancel()
+        continuation?.resume(throwing: CancellationError())
     }
 }

@@ -5,8 +5,13 @@ set -e
 xattr -cr Sources || true
 
 APP_NAME="WisprClone"
-OUTPUT_DIR="$PWD"
-APP_BUNDLE="$OUTPUT_DIR/$APP_NAME.app"
+# Install outside iCloud-synced folders (Desktop/Documents), where macOS can evict files
+INSTALLED_APP="/Applications/$APP_NAME.app"
+APP_BUNDLE="$PWD/$APP_NAME.app"
+
+echo "🧹 Cleaning up old processes..."
+pkill "$APP_NAME" || true
+sleep 1
 
 echo "🚀 Building Release Configuration..."
 swift build -c release
@@ -41,5 +46,11 @@ rm -rf "$APP_BUNDLE"
 cp -R "$TMP_APP" "$APP_BUNDLE"
 
 echo "✅ App Bundle Created at: $APP_BUNDLE"
+
+# Install into /Applications
+echo "🔄 Installing to $INSTALLED_APP..."
+rm -rf "$INSTALLED_APP"
+cp -R "$APP_BUNDLE" "$INSTALLED_APP"
+
 echo "👉 Launching app..."
-open "$APP_BUNDLE"
+open "$INSTALLED_APP"

@@ -8,6 +8,12 @@ class AudioUtils {
         case processingError
     }
     
+    /// Clip length in seconds, read from the file header (no decoding)
+    static func duration(of url: URL) -> Double {
+        guard let file = try? AVAudioFile(forReading: url), file.fileFormat.sampleRate > 0 else { return 0 }
+        return Double(file.length) / file.fileFormat.sampleRate
+    }
+
     /// Decodes an audio file to an array of Floats (16kHz, Mono) required by Whisper
     static func decodeAudioFileToOtherFormat(url: URL) throws -> [Float] {
         let file = try AVAudioFile(forReading: url)

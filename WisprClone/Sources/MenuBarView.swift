@@ -74,6 +74,19 @@ struct MenuBarView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(appState.lastTranscript, forType: .string)
+                    }) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy to clipboard")
                 }
                 Text(appState.lastTranscript)
                     .font(.body)
@@ -82,6 +95,20 @@ struct MenuBarView: View {
                     .padding(8)
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(6)
+                
+                if case .error(let message) = appState.status {
+                    Text(message)
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .lineLimit(3)
+                        .textSelection(.enabled)
+                } else if let warning = appState.smartFlowWarning {
+                    Text("⚠️ Smart Flow failed, pasted unformatted: \(warning)")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .lineLimit(3)
+                        .textSelection(.enabled)
+                }
             }
             
             Divider()
@@ -116,6 +143,10 @@ struct MenuBarView: View {
                     SecureField("Groq API Key", text: $appState.groqApiKey)
                         .textFieldStyle(.roundedBorder)
                         .controlSize(.small)
+                    TextField("Groq Model (default: \(GroqProvider.defaultModel))", text: $appState.groqModel)
+                        .textFieldStyle(.roundedBorder)
+                        .controlSize(.small)
+                        .help("Model ID from console.groq.com/docs/models. Leave empty for \(GroqProvider.defaultModel).")
                 }
             }
             
@@ -169,6 +200,8 @@ struct MenuBarView: View {
             Divider()
             
             Toggle("Launch at Login", isOn: $appState.launchAtLogin)
+            Toggle("High Performance (Disable Context)", isOn: $appState.highPerformanceMode)
+                .help("Disables Accessibility focus capture and Custom Vocabulary for maximum speed.")
             
             Divider()
             

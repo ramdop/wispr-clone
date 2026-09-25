@@ -165,3 +165,27 @@ User requested research on how "Wispr Flow" achieves its advanced modes (Context
   2. **Strict Timeout**: Reverted the source code to enforce a strict **10s timeout** per spec, ensuring the app "fails fast" if the requirement isn't met.
   3. **Build Sync**: Performed a clean rebuild using `scripts/build_app.sh` to sync the binary with the optimized source code.
 - **Verification**: User confirmed permissions and app functionality restored.
+
+## Paste Latency & UI Stalls Fix (2026-09-25)
+
+- **Symptom**: Logs showed transcription (and "Total Pipeline") finishing immediately, but the text appeared near the cursor only after a noticeable delay, and the next hotkey press was sometimes ignored.
+- **Root Causes**:
+  1. **Focus capture blocked the paste**: `FocusCapture` (AX calls into the target app, including reading the whole field value) ran *before* `TextInjector.inject`. It was raced against a 200ms sleep in a `withThrowingTaskGroup`, but a task group always waits for every child, so the "timeout" never cut anything short. AX calls default to a ~6s messaging timeout each, and Electron/Chrome apps are slow to answer.
+  2. **Main-thread AX in the correction session**: every value change in the target field triggered a synchronous AX read on the main thread for 3-20s after each paste, stalling the HUD and Carbon hotkey handling.
+  3. **Busy status after paste**: status stayed `.pasting` for an extra 1s, and `startRecording` ignores the hotkey unless idle.
+  4. **Same timeout bug in transcription**: Apple Speech/Whisper 30s timeouts were task groups too; a recognizer that never called back hung the app in `.transcribing`.
+- **Fixes**:
+  1. Paste first; capture focus and start the correction session afterwards on a background task.
+  2. Global AX messaging timeout (0.5s) set at launch; correction-session reads moved to a serial background queue and coalesced.
+  3. Status goes idle right after paste.
+  4. `withTimeout` helper (`Timeout.swift`) that resumes at the deadline; Apple Speech now cancels the `SFSpeechRecognitionTask` and resumes its continuation exactly once.
+  5. Smaller wins: HID key-release backup poll 100ms→30ms (debounce 300ms→90ms), HUD SwiftUI view built once instead of on every status change, mic level published at ~20 Hz via a separate `AudioLevelMeter` so only the waveform re-renders, clipboard restore made safe for back-to-back dictations.
+
+## Groq Model Retirement & Smart Flow Resilience (2026-09-25)
+
+- **Issue**: Every dictation failed with "The model `llama-3.1-8b-instant` does not exist or you do not have access to it." Groq shut the model down for free/developer tiers on 2026-08-16. Because the LLM error was thrown through the whole pipeline, a *formatting* failure blocked pasting a perfectly good transcript.
+- **Fixes**:
+  1. Default Groq model is now `openai/gpt-oss-20b` (Groq's official replacement, ~1000 tok/s), sent with `reasoning_effort: "low"` and `include_reasoning: false` to keep latency down and the answer clean.
+  2. The Groq model is editable in the menu (`groqModel` in UserDefaults), so the next retirement is a settings change: pick a model from https://console.groq.com/docs/models.
+  3. Dictation falls back to the unformatted transcript when Smart Flow fails, with an orange warning under "Last Transcript". Command mode still fails (it must never paste the spoken instruction over the selection), including when Ollama is down.
+- **LatencyTracker schema**: an older `latency.db` used `total_turnaround` where the current code writes `total_latency`. The tracker now reads `PRAGMA table_info` at startup, adds missing columns, and keeps `total_turnaround` filled when present.

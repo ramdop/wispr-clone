@@ -11,14 +11,14 @@ We have created a release script that builds a portable `.zip` file.
 Run the release script once to generate the package:
 
 ```bash
-cd "Desktop/Build Things/wispr clone/WisprClone"
+cd ~/Code/wispr-clone/WisprClone
 chmod +x scripts/release.sh
 ./scripts/release.sh
 ```
 
 This will create a new folder called **`Release`** containing `WisprClone_Release.zip`.
 
-> **⚠️ IMPORTANT**: After making code changes, always run `./scripts/build_app.sh` first to create the `.app` bundle. Running `xcodebuild` alone only produces an executable in DerivedData, not the distributable app bundle.
+> **⚠️ IMPORTANT**: After making code changes, always run `./scripts/build_app.sh` first to create the `.app` bundle (it also installs it to `/Applications` and launches it). Keep the repo out of iCloud-synced folders like Desktop/Documents: evicted files break git (`mmap failed: Operation canceled`) and builds. Running `xcodebuild` alone only produces an executable in DerivedData, not the distributable app bundle.
 
 ### 2. Transfer
 
