@@ -30,7 +30,13 @@ class HUDOverlay: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
     
+    private var isSetUp = false
+    
+    /// Installs the SwiftUI content once; the view observes AppState for everything after that
     func setup(appState: AppState) {
+        guard !isSetUp else { return }
+        isSetUp = true
+        
         let view = WaveformView(appState: appState)
         let hostingView = NSHostingView(rootView: view)
         hostingView.wantsLayer = true
@@ -39,17 +45,9 @@ class HUDOverlay: NSWindowController {
         self.window?.contentView = hostingView
         self.window?.backgroundColor = .clear
         
-        // Resize window
-        // Hardcode a safe size for now, close to WaveformView's frame (90+32, 28+16) ~ 122x44
-        let newSize = CGSize(width: 130, height: 60)
-        
-        // Center again with new size
-        if let screen = NSScreen.main {
-            let screenRect = screen.visibleFrame
-            let x = screenRect.midX - (newSize.width / 2)
-            let y = screenRect.minY + 50
-            self.window?.setFrame(NSRect(origin: CGPoint(x: x, y: y), size: newSize), display: true)
-        }
+        // Hardcode a safe size for now, close to WaveformView's frame (60+20, 22+12) plus room for the toast
+        self.window?.setContentSize(CGSize(width: 130, height: 60))
+        centerWindow()
     }
     
     func show() {
@@ -65,7 +63,8 @@ class HUDOverlay: NSWindowController {
         guard let screen = NSScreen.main else { return }
         
         let screenRect = screen.visibleFrame
-        let x = screenRect.midX - (windowSize.width / 2)
+        let width = window?.frame.width ?? windowSize.width
+        let x = screenRect.midX - (width / 2)
         let y = screenRect.minY + 50 // Floating 50pts from bottom
         
         window?.setFrameOrigin(NSPoint(x: x, y: y))

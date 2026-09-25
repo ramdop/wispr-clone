@@ -18,40 +18,33 @@ class WhisperEngine: TranscriptionEngine {
             throw NSError(domain: "WhisperEngine", code: 1, userInfo: [NSLocalizedDescriptionKey: "Whisper model not initialized"])
         }
         
-        // Strict 10s timeout per spec
-        return try await withThrowingTaskGroup(of: String.self) { group in
-            group.addTask {
-                let decodeStart = Date()
-                let frames = try AudioUtils.decodeAudioFileToOtherFormat(url: audioFile)
-                Logger.info("⏱️ [Whisper] Audio decode: \(String(format: "%.2fs", Date().timeIntervalSince(decodeStart))) (\(frames.count) samples)")
-                
-                let txStart = Date()
-                let segments = try await whisper.transcribe(audioFrames: frames)
-                Logger.info("⏱️ [Whisper] Model inference: \(String(format: "%.2fs", Date().timeIntervalSince(txStart)))")
-                
-                let resultText = segments.map { $0.text }.joined(separator: " ")
-                Logger.debug("[Whisper] Output: \(resultText)")
-                return resultText
-            }
+        // Real timeout: returns at the deadline instead of waiting for inference to finish
+        let result: String = try await withTimeout(
+            seconds: 30, // matches AppleSpeechEngine
+            timeoutError: { NSError(domain: "WhisperEngine", code: 2, userInfo: [NSLocalizedDescriptionKey: "Whisper transcription timed out (30s)."]) }
+        ) {
+            let decodeStart = Date()
+            let frames = try AudioUtils.decodeAudioFileToOtherFormat(url: audioFile)
+            Logger.info("⏱️ [Whisper] Audio decode: \(String(format: "%.2fs", Date().timeIntervalSince(decodeStart))) (\(frames.count) samples)")
             
-            group.addTask {
-                try await Task.sleep(nanoseconds: 30 * 1_000_000_000) // matches AppleSpeechEngine
-                throw NSError(domain: "WhisperEngine", code: 2, userInfo: [NSLocalizedDescriptionKey: "Whisper transcription timed out (30s)."])
-            }
+            let txStart = Date()
+            let segments = try await whisper.transcribe(audioFrames: frames)
+            Logger.info("⏱️ [Whisper] Model inference: \(String(format: "%.2fs", Date().timeIntervalSince(txStart)))")
             
-            let result = try await group.next()!
-            group.cancelAll()
-            
-            // Aggressive cleaning for Whisper Hallucinations
-            var cleaned = result.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Common hallucinations on silence
-            let hallucinations = ["[BLANK_AUDIO]", "[audible]", "[silence]", "(wind)", "(mumbles)"]
-            for h in hallucinations {
-                cleaned = cleaned.replacingOccurrences(of: h, with: "")
-            }
-            
-            return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+            let resultText = segments.map { $0.text }.joined(separator: " ")
+            Logger.debug("[Whisper] Output: \(resultText)")
+            return resultText
         }
+        
+        // Aggressive cleaning for Whisper Hallucinations
+        var cleaned = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Common hallucinations on silence
+        let hallucinations = ["[BLANK_AUDIO]", "[audible]", "[silence]", "(wind)", "(mumbles)"]
+        for h in hallucinations {
+            cleaned = cleaned.replacingOccurrences(of: h, with: "")
+        }
+        
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

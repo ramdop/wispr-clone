@@ -41,12 +41,15 @@ This document visualizes all steps in the transcription pipeline that can add la
 │                                                                             │
 │  ⌨️ TEXT INJECTION                    ⏱️ ~0.1s                              │
 │  └── Clipboard + Cmd+V paste                                                │
+│  └── Status → idle immediately (next hotkey accepted right away)           │
 │                                                                             │
 │  ──────────────────────────────────────────────────────────────────────     │
 │                                                                             │
 │  👁️ CORRECTION SESSION (async)        ⏱️ 3-20s (background)                 │
+│  └── Focus capture (AX)               AFTER paste, off main thread          │
 │  └── Idle timeout                     3s                                    │
 │  └── Hard stop                        20s                                   │
+│  └── AX reads on background queue, coalesced                               │
 │  └── Does NOT block pipeline                                                │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -87,9 +90,17 @@ Sample output:
 | Ollama cold start       | Model loads into GPU            | Keep Ollama warm with frequent use        |
 | Multilingual Whisper    | Slower than English-only        | Use `ggml-*.en.bin` models                |
 | App Nap (Finder launch) | macOS throttles background apps | `NSAppSleepDisabled = true` in Info.plist |
+| Paste delayed after "Total Pipeline" log | Focus capture (AX) ran *before* paste; its 200ms "timeout" was a task group, which waits for all children, and AX calls default to ~6s each | Paste first, capture focus afterwards off-main; global AX messaging timeout of 0.5s (`FocusCapture.configureMessagingTimeout`) |
+| HUD freezes / hotkey ignored after paste | Correction session read the target field via AX on the main thread on every edit; status held in `.pasting` for 1s | AX reads on a background queue; go idle right after paste |
+
+### Rules of thumb
+
+- **Never use a task group as a timeout** for work that can ignore cancellation (AX calls, callbacks). Use `withTimeout` in `Timeout.swift`, which resumes at the deadline.
+- **Never make AX calls on the main thread** during the dictation pipeline. Every AX call is an IPC round-trip into another, possibly busy, app.
+- The gap between the `Total Pipeline` and `⏱️ Injection completed` log lines should be ~0ms.
 
 ---
 
 ## Last Updated
 
-2026-01-29
+2026-09-25

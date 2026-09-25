@@ -33,6 +33,13 @@ enum WhisperModel: String, Codable, CaseIterable {
     }
 }
 
+/// Mic level for the recording waveform. Kept out of AppState so ~20 Hz level updates
+/// only re-render the waveform, not every view observing AppState.
+@MainActor
+final class AudioLevelMeter: ObservableObject {
+    @Published var level: Float = 0.0
+}
+
 @MainActor
 class AppState: ObservableObject, HotKeyDelegate {
     @Published var status: AppStatus = .idle {
@@ -72,7 +79,7 @@ class AppState: ObservableObject, HotKeyDelegate {
     @Published var hasSpeechAccess: Bool = false
     @Published var hasAccessibilityAccess: Bool = false
     
-    @Published var audioLevel: Float = 0.0
+    let audioMeter = AudioLevelMeter()
     @Published var processingDuration: Double?
     
     // LLM & Snippets
@@ -84,6 +91,8 @@ class AppState: ObservableObject, HotKeyDelegate {
     
     // Active correction session
     private var activeCorrectionSession: CorrectionSession?
+    // Bumped per paste so a slow focus capture can't start a session for an older paste
+    private var correctionGeneration = 0
     
     @Published var useSnippets: Bool = true {
         didSet {
@@ -154,6 +163,9 @@ class AppState: ObservableObject, HotKeyDelegate {
     private var notificationTimer: Timer?
     
     init() {
+        // Bound every AX call into other apps (system default is ~6s per call)
+        FocusCapture.configureMessagingTimeout()
+        
         // Load preferences
         if let savedEngine = UserDefaults.standard.string(forKey: "selectedEngine"),
            let engine = TranscriptionProvider(rawValue: savedEngine) {
@@ -288,9 +300,10 @@ class AppState: ObservableObject, HotKeyDelegate {
             }
         }
         
-        recorder.onAudioLevelUpdate = { [weak self] level in
-            Task { @MainActor in
-                self?.audioLevel = level
+        let meter = audioMeter
+        recorder.onAudioLevelUpdate = { level in
+            DispatchQueue.main.async {
+                meter.level = level
             }
         }
     }
@@ -348,6 +361,7 @@ class AppState: ObservableObject, HotKeyDelegate {
         }
         
         // THEN: Update status (this triggers HUD show)
+        audioMeter.level = 0
         status = .recording
         processingDuration = nil // Reset duration
         playHaptic()
@@ -359,25 +373,26 @@ class AppState: ObservableObject, HotKeyDelegate {
         }
     }
     
+    /// Backup for the Carbon hotkey-released event (primary stop signal, handled in hotKeyUp),
+    /// which is unreliable for modifier chords.
     private func startKeyPolling() {
         keyReleaseCount = 0
         keyPollingTimer?.invalidate()
-        keyPollingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
-            guard let self = self else { return timer.invalidate() }
-            
-            // Use HID System State (Hardware) for truth
-            let isSpaceDown = CGEventSource.keyState(.hidSystemState, key: CGKeyCode(kVK_Space))
-            
-            if isSpaceDown {
-                Task { @MainActor in
+        // Timer fires on the main run loop
+        keyPollingTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                guard let self = self else { return timer.invalidate() }
+                
+                // Use HID System State (Hardware) for truth
+                let isSpaceDown = CGEventSource.keyState(.hidSystemState, key: CGKeyCode(kVK_Space))
+                
+                if isSpaceDown {
                     self.keyReleaseCount = 0
-                }
-            } else {
-                Task { @MainActor in
+                } else {
                     self.keyReleaseCount += 1
-                    // Debounce: require 3 consecutive hits (0.3s) of "key up" to stop
+                    // Debounce: require 3 consecutive hits (~90ms) of "key up" to stop
                     // This prevents premature stops from HID polling glitches while
-                    // ensuring we stop even if the Carbon event is lost.
+                    // ensuring we stop quickly even if the Carbon event is lost.
                     if self.keyReleaseCount >= 3 {
                         Logger.debug("Polling (HID): Spacebar released (debounced). Stopping.")
                         self.stopRecording()
@@ -528,51 +543,20 @@ class AppState: ObservableObject, HotKeyDelegate {
                 // --- FINAL UI UPDATE & PASTE ---
                 await MainActor.run {
                     self.lastTranscript = finalCleaned
-                    self.status = .pasting
                     self.processingDuration = duration
                     Logger.info("Total Pipeline: \(String(format: "%.2fs", duration))")
                     
-                    // Trigger Paste Logic
-                    Task {
-                        // Capture focus before paste for correction learning
-                        // Use a timeout (200ms) to prevent hanging if target app is unresponsive
-                        var focusInfo: FocusInfo? = nil
-                        do {
-                            focusInfo = try await withThrowingTaskGroup(of: FocusInfo?.self) { group in
-                                group.addTask {
-                                    return await FocusCapture.captureCurrentFocus()
-                                }
-                                group.addTask {
-                                    try await Task.sleep(nanoseconds: 200_000_000)
-                                    throw CancellationError()
-                                }
-                                let result = try await group.next()
-                                group.cancelAll()
-                                return result ?? nil
-                            }
-                        } catch {
-                            Logger.warning("[AppState] Focus capture timed out, proceeding with paste")
-                        }
-                        
+                    // Paste first. Focus capture for correction learning makes blocking AX calls into
+                    // the target app, so it runs afterwards and off the main thread.
+                    if !finalCleaned.isEmpty {
+                        self.status = .pasting
                         TextInjector.inject(text: finalCleaned)
                         Logger.info("⏱️ Injection completed")
-                        
-                        // Start correction session
-                        if let info = focusInfo, !finalCleaned.isEmpty {
-                            let session = CorrectionSession(injectedText: finalCleaned, focusInfo: info)
-                            session.start { [weak self] result in
-                                guard let result = result else { return }
-                                Task { @MainActor in
-                                    self?.processCorrectionResult(result)
-                                }
-                            }
-                            // Store reference on MainActor
-                            self.activeCorrectionSession = session
-                        }
-                        
-                        try? await Task.sleep(nanoseconds: 1_000_000_000)
-                        self.status = .idle
+                        self.beginCorrectionLearning(injectedText: finalCleaned)
                     }
+                    
+                    // Ready for the next dictation immediately
+                    self.status = .idle
                 }
                 
             } catch {
@@ -589,16 +573,14 @@ class AppState: ObservableObject, HotKeyDelegate {
     }
     
     private func updateHUD() {
-        Task { @MainActor in
-            // Lazy setup
-            HUDOverlay.shared.setup(appState: self)
-            
-            switch status {
-            case .idle, .error:
-                HUDOverlay.shared.hide()
-            case .recording, .transcribing, .processing, .pasting:
-                HUDOverlay.shared.show()
-            }
+        // Lazy one-time setup
+        HUDOverlay.shared.setup(appState: self)
+        
+        switch status {
+        case .idle, .error:
+            HUDOverlay.shared.hide()
+        case .recording, .transcribing, .processing, .pasting:
+            HUDOverlay.shared.show()
         }
     }
     
@@ -684,6 +666,26 @@ class AppState: ObservableObject, HotKeyDelegate {
     
     // MARK: - Correction Learning
     
+    /// Capture the focused field off the main thread, then watch it for user corrections
+    private func beginCorrectionLearning(injectedText: String) {
+        // A new paste supersedes any session still watching the previous one
+        activeCorrectionSession?.cancel()
+        activeCorrectionSession = nil
+        correctionGeneration += 1
+        let generation = correctionGeneration
+        
+        Task.detached(priority: .utility) { [weak self] in
+            guard let focusInfo = FocusCapture.captureCurrentFocus() else {
+                Logger.debug("[CorrectionLearning] No focused element captured; skipping session")
+                return
+            }
+            await MainActor.run {
+                guard let self = self, self.correctionGeneration == generation else { return }
+                self.startCorrectionSession(injectedText: injectedText, focusInfo: focusInfo)
+            }
+        }
+    }
+    
     private func startCorrectionSession(injectedText: String, focusInfo: FocusInfo) {
         // Cancel any existing session
         activeCorrectionSession?.cancel()
@@ -691,11 +693,15 @@ class AppState: ObservableObject, HotKeyDelegate {
         let session = CorrectionSession(injectedText: injectedText, focusInfo: focusInfo)
         activeCorrectionSession = session
         
-        session.start { [weak self] result in
-            guard let self = self, let result = result else { return }
-            
+        session.start { [weak self, weak session] result in
             Task { @MainActor in
-                self.processCorrectionResult(result)
+                guard let self = self else { return }
+                if let session = session, self.activeCorrectionSession === session {
+                    self.activeCorrectionSession = nil
+                }
+                if let result = result {
+                    self.processCorrectionResult(result)
+                }
             }
         }
     }

@@ -1,4 +1,5 @@
 import AVFoundation
+import Accelerate
 
 class AudioRecorder: NSObject {
     private let engine = AVAudioEngine()
@@ -9,6 +10,12 @@ class AudioRecorder: NSObject {
     private var sampleRate: Double = 44100.0
     private var currentFileURL: URL?
     private var maxLevelSeen: Float = 0.0
+    
+    // Level meter throttling (audio thread only): the UI only needs ~20 updates/sec,
+    // each update re-renders every view observing the level
+    private static let levelUpdatesPerSecond: Double = 20
+    private var levelFramesAccumulated: AVAudioFrameCount = 0
+    private var levelPeakInWindow: Float = 0.0
     
     var onRecordingFinished: ((URL) -> Void)?
     var onAudioLevelUpdate: ((Float) -> Void)?
@@ -25,6 +32,9 @@ class AudioRecorder: NSObject {
         sampleRate = format.sampleRate
         framesWritten = 0
         maxLevelSeen = 0.0
+        levelFramesAccumulated = 0
+        levelPeakInWindow = 0.0
+        let framesPerLevelUpdate = AVAudioFrameCount(format.sampleRate / Self.levelUpdatesPerSecond)
         
         // Create temp file with unique name to avoid race conditions
         let tempDir = FileManager.default.temporaryDirectory
@@ -46,17 +56,20 @@ class AudioRecorder: NSObject {
             }
             
             // Calculate Level (RMS) for Visuals
-            let channelDataValue = buffer.floatChannelData?.pointee
-            let channelDataValueArray = stride(from: 0, 
-                                             to: Int(buffer.frameLength),
-                                             by: buffer.stride).map{ channelDataValue?[$0] ?? 0 }
-            
-            // Calculate RMS
-            let rms = sqrt(channelDataValueArray.map{ $0 * $0 }.reduce(0, +) / Float(buffer.frameLength))
+            guard let channelData = buffer.floatChannelData?.pointee, buffer.frameLength > 0 else { return }
+            var rms: Float = 0
+            vDSP_rmsqv(channelData, vDSP_Stride(buffer.stride), &rms, vDSP_Length(buffer.frameLength))
             let level = min(max(rms * 15.0, 0), 1.0)
-            
-            self.onAudioLevelUpdate?(level)
             self.maxLevelSeen = max(self.maxLevelSeen, level)
+            
+            // Emit the loudest level of each window instead of every buffer
+            self.levelPeakInWindow = max(self.levelPeakInWindow, level)
+            self.levelFramesAccumulated += buffer.frameLength
+            if self.levelFramesAccumulated >= framesPerLevelUpdate {
+                self.onAudioLevelUpdate?(self.levelPeakInWindow)
+                self.levelFramesAccumulated = 0
+                self.levelPeakInWindow = 0
+            }
         }
         
         engine.prepare()

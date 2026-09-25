@@ -18,23 +18,7 @@ struct WaveformView: View {
                     .transition(.opacity)
                     .id("toast_\(message)") // Force redraw on message change
             } else if appState.status == .recording {
-                HStack(spacing: 3) {
-                    // Chromatic Aberration Effect: 3 Layers
-                    ZStack {
-                        // Red Layer
-                        WaveformLayer(color: .red.opacity(0.8), audioLevel: appState.audioLevel, phase: phase)
-                            .offset(x: -3 * CGFloat(appState.audioLevel))
-                            .blur(radius: 0.5)
-                        
-                        // Blue Layer
-                        WaveformLayer(color: .blue.opacity(0.8), audioLevel: appState.audioLevel, phase: phase)
-                            .offset(x: 3 * CGFloat(appState.audioLevel))
-                            .blur(radius: 0.5)
-                        
-                        // Green/White Core Layer
-                        WaveformLayer(color: .white, audioLevel: appState.audioLevel, phase: phase)
-                    }
-                }
+                RecordingWaveform(meter: appState.audioMeter, phase: phase)
             } else {
                 // Processing / Pasting State
                 Image(systemName: "hourglass")
@@ -66,6 +50,32 @@ struct WaveformView: View {
         .onAppear {
             withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                 phase = .pi * 2
+            }
+        }
+    }
+}
+
+/// Observes only the audio meter, so ~20 Hz level updates re-render just the bars
+struct RecordingWaveform: View {
+    @ObservedObject var meter: AudioLevelMeter
+    let phase: CGFloat
+    
+    var body: some View {
+        HStack(spacing: 3) {
+            // Chromatic Aberration Effect: 3 Layers
+            ZStack {
+                // Red Layer
+                WaveformLayer(color: .red.opacity(0.8), audioLevel: meter.level, phase: phase)
+                    .offset(x: -3 * CGFloat(meter.level))
+                    .blur(radius: 0.5)
+                
+                // Blue Layer
+                WaveformLayer(color: .blue.opacity(0.8), audioLevel: meter.level, phase: phase)
+                    .offset(x: 3 * CGFloat(meter.level))
+                    .blur(radius: 0.5)
+                
+                // Green/White Core Layer
+                WaveformLayer(color: .white, audioLevel: meter.level, phase: phase)
             }
         }
     }
