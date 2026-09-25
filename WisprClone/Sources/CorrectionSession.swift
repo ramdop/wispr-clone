@@ -47,43 +47,47 @@ class CorrectionSession {
     /// Completion is called with result when session ends (either by idle settle or hard stop)
     func start(completion: @escaping (CorrectionResult?) -> Void) {
         self.completion = completion
-
-        // Create AX observer
-        var observerRef: AXObserver?
-        let createResult = AXObserverCreate(focusInfo.pid, axCallback, &observerRef)
-
-        guard createResult == .success, let obs = observerRef else {
-            Logger.error("[CorrectionSession] Failed to create AXObserver: \(createResult.rawValue)")
-            isFinished = true
-            self.completion = nil
-            completion(nil)
-            return
-        }
-
-        self.observer = obs
-
-        // Add notification for value changes
-        let addResult = AXObserverAddNotification(obs, focusInfo.element, kAXValueChangedNotification as CFString, Unmanaged.passUnretained(self).toOpaque())
-
-        if addResult != .success {
-            Logger.debug("[CorrectionSession] Failed to add value notification: \(addResult.rawValue)")
-            // Continue anyway - we'll use timer-based snapshots as fallback
-        }
-
-        // Add observer to run loop
-        CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .commonModes)
-
-        // Start hard stop timer
+        
+        // Timers start immediately; the observer is registered in the background
         hardStopTimer = Timer.scheduledTimer(withTimeInterval: hardStopDelay, repeats: false) { [weak self] _ in
             self?.endSession(reason: "hard stop")
         }
-
-        // Start initial idle timer
         restartIdleTimer()
-
-        Logger.debug("[CorrectionSession] Started observing for corrections (bundleID: \(focusInfo.bundleID ?? "unknown"))")
+        
+        // Registering the notification is an IPC round-trip into the target app and can block
+        let pid = focusInfo.pid
+        let element = focusInfo.element
+        let refcon = Unmanaged.passUnretained(self).toOpaque()
+        CorrectionSession.axQueue.async { [weak self] in
+            var observerRef: AXObserver?
+            let createResult = AXObserverCreate(pid, axCallback, &observerRef)
+            
+            guard createResult == .success, let obs = observerRef else {
+                Logger.warning("[CorrectionSession] Failed to create AXObserver: \(createResult.rawValue)")
+                return // Idle/hard-stop timers still end the session with a final snapshot
+            }
+            
+            let addResult = AXObserverAddNotification(obs, element, kAXValueChangedNotification as CFString, refcon)
+            if addResult != .success {
+                Logger.debug("[CorrectionSession] Failed to add value notification: \(addResult.rawValue)")
+                // Continue anyway - the final snapshot at session end still captures corrections
+            }
+            
+            DispatchQueue.main.async {
+                // Attach only if the session is still live; the unretained refcon must not outlive it
+                guard let self = self, !self.isFinished else {
+                    CorrectionSession.axQueue.async {
+                        AXObserverRemoveNotification(obs, element, kAXValueChangedNotification as CFString)
+                    }
+                    return
+                }
+                self.observer = obs
+                CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .commonModes)
+                Logger.debug("[CorrectionSession] Started observing for corrections (bundleID: \(self.focusInfo.bundleID ?? "unknown"))")
+            }
+        }
     }
-
+    
     /// Called on the main thread when an AX value-changed notification is received
     func handleValueChanged() {
         guard !isFinished else { return }
@@ -100,7 +104,7 @@ class CorrectionSession {
         snapshotInFlight = true
 
         let element = focusInfo.element
-        Self.axQueue.async { [weak self] in
+        CorrectionSession.axQueue.async { [weak self] in
             let value = FocusCapture.readValue(from: element)
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -133,7 +137,7 @@ class CorrectionSession {
 
         // Take final snapshot off the main thread; the serial queue orders it after any in-flight read
         let element = focusInfo.element
-        Self.axQueue.async {
+        CorrectionSession.axQueue.async {
             let value = FocusCapture.readValue(from: element)
             DispatchQueue.main.async {
                 if let value = value {
@@ -161,8 +165,13 @@ class CorrectionSession {
         hardStopTimer = nil
 
         if let obs = observer {
-            AXObserverRemoveNotification(obs, focusInfo.element, kAXValueChangedNotification as CFString)
+            // Detach from the run loop now (local) so no more callbacks arrive;
+            // unregistering is IPC, so do it in the background
             CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .commonModes)
+            let element = focusInfo.element
+            CorrectionSession.axQueue.async {
+                AXObserverRemoveNotification(obs, element, kAXValueChangedNotification as CFString)
+            }
         }
         observer = nil
     }

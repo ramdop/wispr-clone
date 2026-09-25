@@ -2,7 +2,7 @@ import Speech
 import Foundation
 
 protocol TranscriptionEngine {
-    func transcribe(audioFile: URL, contextualStrings: [String]) async throws -> String
+    func transcribe(audioFile: URL, duration: Double, contextualStrings: [String]) async throws -> String
 }
 
 enum TranscriptionProvider: String, Codable {
@@ -12,8 +12,10 @@ enum TranscriptionProvider: String, Codable {
 
 class SpeechTranscriber {
     private var engine: TranscriptionEngine
+    var currentProvider: TranscriptionProvider
     
     init(provider: TranscriptionProvider = .apple) {
+        self.currentProvider = provider
         switch provider {
         case .apple:
             self.engine = AppleSpeechEngine()
@@ -24,6 +26,7 @@ class SpeechTranscriber {
     }
     
     func setProvider(_ provider: TranscriptionProvider, modelUrl: URL? = nil) {
+        self.currentProvider = provider
         switch provider {
         case .apple:
             self.engine = AppleSpeechEngine()
@@ -38,8 +41,8 @@ class SpeechTranscriber {
         }
     }
     
-    func transcribe(audioFile: URL, contextualStrings: [String] = []) async throws -> String {
-        return try await engine.transcribe(audioFile: audioFile, contextualStrings: contextualStrings)
+    func transcribe(audioFile: URL, duration: Double, contextualStrings: [String] = []) async throws -> String {
+        return try await engine.transcribe(audioFile: audioFile, duration: duration, contextualStrings: contextualStrings)
     }
 }
 
@@ -52,7 +55,7 @@ class AppleSpeechEngine: TranscriptionEngine {
         self.recognizer = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
     
-    func transcribe(audioFile: URL, contextualStrings: [String]) async throws -> String {
+    func transcribe(audioFile: URL, duration: Double, contextualStrings: [String]) async throws -> String {
         guard let recognizer = recognizer else {
             throw NSError(domain: "AppleSpeechEngine", code: 1, userInfo: [NSLocalizedDescriptionKey: "SFSpeechRecognizer not available"])
         }
@@ -61,10 +64,16 @@ class AppleSpeechEngine: TranscriptionEngine {
             throw NSError(domain: "AppleSpeechEngine", code: 2, userInfo: [NSLocalizedDescriptionKey: "Recognizer is currently unavailable"])
         }
         
+        // Dynamic Timeout: 5s overhead + 1.0x duration
+        // e.g., 2s audio -> 10s timeout
+        // e.g., 20s audio -> 25s timeout
+        let timeout = max(5.0, duration * 1.0) + 5.0
+        Logger.debug("Using dynamic timeout: \(String(format: "%.1fs", timeout)) for duration: \(String(format: "%.1fs", duration))")
+        
         // Real timeout: returns at the deadline even if the recognizer never calls back
         return try await withTimeout(
-            seconds: 30,
-            timeoutError: { NSError(domain: "AppleSpeechEngine", code: 3, userInfo: [NSLocalizedDescriptionKey: "Transcription timed out (30s)."]) }
+            seconds: timeout,
+            timeoutError: { NSError(domain: "AppleSpeechEngine", code: 3, userInfo: [NSLocalizedDescriptionKey: "Transcription timed out (\(Int(timeout))s)."]) }
         ) { () async throws -> String in
             try await self.performTranscription(recognizer: recognizer, audioFile: audioFile, contextualStrings: contextualStrings)
         }
@@ -79,12 +88,12 @@ class AppleSpeechEngine: TranscriptionEngine {
                     request.shouldReportPartialResults = false
                     
                     if recognizer.supportsOnDeviceRecognition {
-                        // Try on-device but allow network fallback for better results on long dictations
-                        request.requiresOnDeviceRecognition = false
+                        // Prefer on-device for speed and stability
+                        request.requiresOnDeviceRecognition = true
                     }
                     
                     request.contextualStrings = contextualStrings
-                    Logger.debug("SFSpeech: Added \(contextualStrings.count) contextual strings (Requested OnDevice: false)")
+                    Logger.debug("SFSpeech: Added \(contextualStrings.count) contextual strings (OnDevice: \(request.requiresOnDeviceRecognition))")
                     
                     return recognizer.recognitionTask(with: request) { result, error in
                         if let error = error {

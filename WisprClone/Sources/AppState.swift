@@ -88,11 +88,18 @@ class AppState: ObservableObject, HotKeyDelegate {
     @Published var snippetStore = SnippetStore()
     @Published var customVocabularyStore = CustomVocabularyStore()
     @Published var learnedDictionaryStore = LearnedDictionaryStore()
+    private let latencyTracker = LatencyTracker.shared
     
     // Active correction session
     private var activeCorrectionSession: CorrectionSession?
     // Bumped per paste so a slow focus capture can't start a session for an older paste
     private var correctionGeneration = 0
+    
+    @Published var highPerformanceMode: Bool = UserDefaults.standard.bool(forKey: "highPerformanceMode") {
+        didSet {
+            UserDefaults.standard.set(highPerformanceMode, forKey: "highPerformanceMode")
+        }
+    }
     
     @Published var useSnippets: Bool = true {
         didSet {
@@ -332,6 +339,8 @@ class AppState: ObservableObject, HotKeyDelegate {
     private var keyReleaseCount: Int = 0
     
     func startRecording(mode: InputMode = .dictation) {
+        let startInit = Date()
+        
         // Allow recording from idle or any error state
         switch status {
         case .idle, .error:
@@ -342,13 +351,16 @@ class AppState: ObservableObject, HotKeyDelegate {
         
         guard permissions.hasMicrophoneAccess else {
             setError("Microphone access missing")
+            requestPermissions() // Proactively request if not granted
             return
         }
         
         currentInputMode = mode
         
         // FIRST: Capture context BEFORE changing status (which shows the HUD)
+        var contextTime: Double = 0
         if mode == .command {
+            let contextStart = Date()
             if let text = ContextManager.getSelectedText() {
                 self.contextText = text
                 Logger.info("Context captured: \(text.prefix(50))...")
@@ -356,6 +368,7 @@ class AppState: ObservableObject, HotKeyDelegate {
                 Logger.info("No context captured.")
                 self.contextText = nil 
             }
+            contextTime = Date().timeIntervalSince(contextStart)
         } else {
             self.contextText = nil
         }
@@ -368,6 +381,9 @@ class AppState: ObservableObject, HotKeyDelegate {
         do {
             try recorder.start()
             startKeyPolling()
+            
+            let totalStartLatency = Date().timeIntervalSince(startInit)
+            Logger.info("🚀 Start Latency: Mode=\(mode), ContextCapture=\(String(format: "%.3fs", contextTime)), TotalStart=\(String(format: "%.3fs", totalStartLatency))")
         } catch {
             setError("Failed to start recording: \(error.localizedDescription)")
         }
@@ -422,7 +438,7 @@ class AppState: ObservableObject, HotKeyDelegate {
         status = .transcribing
         
         // 1. Capture State on Main Actor
-        let contextWords = customVocabularyStore.words
+        let contextWords = highPerformanceMode ? [] : customVocabularyStore.words
         let rFillers = removeFillers
         let aPunctuation = addPunctuation
         let uSnippets = useSnippets
@@ -433,6 +449,9 @@ class AppState: ObservableObject, HotKeyDelegate {
         let gKey = groqApiKey
         let cText = contextText
         let llmAvail = isLLMAvailable
+        let isHighPerf = highPerformanceMode
+        let engineName = transcriber.currentProvider.rawValue
+        let latencyTracker = self.latencyTracker
         // Capture dependencies locally to avoid MainActor isolation issues in detached task
         let transcriber = self.transcriber
         let llmService = self.llmService
@@ -442,13 +461,19 @@ class AppState: ObservableObject, HotKeyDelegate {
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self = self else { return }
             
+            let sessionID = UUID().uuidString
+            // Header read only (no decode), so this adds nothing measurable to the pipeline
+            let clipDuration = AudioUtils.duration(of: url)
+            var transcriptionTime: Double = 0
+            var llmTime: Double = 0
+            
             do {
                 // --- TRANSCRIPTION ---
                 let txStart = Date()
                 // Use captured 'transcriber'
-                let text = try await transcriber.transcribe(audioFile: url, contextualStrings: contextWords)
-                let txTime = Date().timeIntervalSince(txStart)
-                Logger.info("⏱️ Transcription: \(String(format: "%.2fs", txTime))")
+                let text = try await transcriber.transcribe(audioFile: url, duration: clipDuration, contextualStrings: contextWords)
+                transcriptionTime = Date().timeIntervalSince(txStart)
+                Logger.info("⏱️ Transcription: \(String(format: "%.2fs", transcriptionTime))")
                 Logger.debug("📝 Raw Transcription: '\(text)'")
                 
                 // --- CLEANUP ---
@@ -521,7 +546,7 @@ class AppState: ObservableObject, HotKeyDelegate {
                                 }
                             }
                         }
-                        let llmTime = Date().timeIntervalSince(llmStart)
+                        llmTime = Date().timeIntervalSince(llmStart)
                         Logger.info("⏱️ LLM Processing: \(String(format: "%.2fs", llmTime)) [Provider: \(llmProvider.rawValue)]")
                     } else {
                     // Smart Flow disabled - apply dictionary replacements
@@ -539,6 +564,8 @@ class AppState: ObservableObject, HotKeyDelegate {
                 
                 let finalCleaned = cleaned
                 let duration = Date().timeIntervalSince(totalStartTime)
+                let tTime = transcriptionTime
+                let lTime = llmTime
                 
                 // --- FINAL UI UPDATE & PASTE ---
                 await MainActor.run {
@@ -548,19 +575,56 @@ class AppState: ObservableObject, HotKeyDelegate {
                     
                     // Paste first. Focus capture for correction learning makes blocking AX calls into
                     // the target app, so it runs afterwards and off the main thread.
+                    var injectTime: Double = 0
                     if !finalCleaned.isEmpty {
                         self.status = .pasting
+                        let injectionStart = Date()
                         TextInjector.inject(text: finalCleaned)
+                        injectTime = Date().timeIntervalSince(injectionStart)
                         Logger.info("⏱️ Injection completed")
-                        self.beginCorrectionLearning(injectedText: finalCleaned)
+                        // High Performance mode skips AX focus capture (and so correction learning)
+                        if !isHighPerf {
+                            self.beginCorrectionLearning(injectedText: finalCleaned)
+                        }
                     }
                     
                     // Ready for the next dictation immediately
                     self.status = .idle
+                    
+                    // Written on the tracker's own background queue
+                    latencyTracker.record(
+                        sessionID: sessionID,
+                        clipDuration: clipDuration,
+                        decodeTime: 0,
+                        prosodyTime: 0,
+                        transcriptionTime: tTime,
+                        llmTime: lTime,
+                        injectionTime: injectTime,
+                        totalLatency: duration,
+                        engine: engineName,
+                        mode: cInputMode.description
+                    )
                 }
                 
             } catch {
                 let errorMsg = error.localizedDescription
+                
+                // Record failure metrics
+                latencyTracker.record(
+                    sessionID: sessionID,
+                    clipDuration: clipDuration,
+                    decodeTime: 0,
+                    prosodyTime: 0,
+                    transcriptionTime: transcriptionTime,
+                    llmTime: llmTime,
+                    injectionTime: 0,
+                    totalLatency: Date().timeIntervalSince(totalStartTime),
+                    engine: engineName,
+                    mode: cInputMode.description,
+                    status: "error",
+                    errorMessage: errorMsg
+                )
+                
                 Logger.error("Processing failed: \(errorMsg)")
                 await MainActor.run {
                     self.setError(errorMsg)

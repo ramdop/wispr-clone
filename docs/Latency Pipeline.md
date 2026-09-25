@@ -71,7 +71,14 @@ This document visualizes all steps in the transcription pipeline that can add la
 
 ## Logging
 
-Timing logs are written to: `~/Desktop/wispr_timing.log`
+Timing logs are written to: `~/Library/Application Support/WisprClone/wispr.log`
+
+Per-dictation metrics (clip length, transcription, LLM, injection, total, engine, mode, errors) are stored in SQLite by `LatencyTracker`:
+
+```bash
+sqlite3 ~/Library/Application\ Support/WisprClone/latency.db \
+  "select start_time, engine, mode, clip_duration, transcription_time, llm_time, injection_time, total_latency, status from metrics order by id desc limit 20;"
+```
 
 Sample output:
 

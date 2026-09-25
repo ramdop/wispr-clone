@@ -74,6 +74,19 @@ struct MenuBarView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(appState.lastTranscript, forType: .string)
+                    }) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy to clipboard")
                 }
                 Text(appState.lastTranscript)
                     .font(.body)
@@ -169,6 +182,8 @@ struct MenuBarView: View {
             Divider()
             
             Toggle("Launch at Login", isOn: $appState.launchAtLogin)
+            Toggle("High Performance (Disable Context)", isOn: $appState.highPerformanceMode)
+                .help("Disables Accessibility focus capture and Custom Vocabulary for maximum speed.")
             
             Divider()
             
