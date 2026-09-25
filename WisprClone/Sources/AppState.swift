@@ -449,6 +449,8 @@ class AppState: ObservableObject, HotKeyDelegate {
         
         // 1. Capture State on Main Actor
         let contextWords = highPerformanceMode ? [] : customVocabularyStore.words
+        // Spellings to bias recognition toward: custom vocabulary plus learned canonical terms
+        let recognitionHints = highPerformanceMode ? [] : contextWords + learnedDictionaryStore.entries.map { $0.canonical }
         let rFillers = removeFillers
         let aPunctuation = addPunctuation
         let uSnippets = useSnippets
@@ -483,7 +485,7 @@ class AppState: ObservableObject, HotKeyDelegate {
                 // --- TRANSCRIPTION ---
                 let txStart = Date()
                 // Use captured 'transcriber'
-                let text = try await transcriber.transcribe(audioFile: url, duration: clipDuration, contextualStrings: contextWords)
+                let text = try await transcriber.transcribe(audioFile: url, duration: clipDuration, contextualStrings: recognitionHints)
                 transcriptionTime = Date().timeIntervalSince(txStart)
                 Logger.info("⏱️ Transcription: \(String(format: "%.2fs", transcriptionTime))")
                 Logger.debug("📝 Raw Transcription: '\(text)'")

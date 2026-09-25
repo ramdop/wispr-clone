@@ -30,7 +30,15 @@ struct WaveformView: View {
         .frame(width: 60, height: 22) // Unified compact size
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        // Fully transparent background
+        // Dark frosted capsule so the white content reads over light and dark apps alike
+        .background(
+            ZStack {
+                VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
+                Color.black.opacity(0.55)
+            }
+            .clipShape(Capsule())
+        )
+        .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
         .overlay(
             Capsule()
                 .strokeBorder(
